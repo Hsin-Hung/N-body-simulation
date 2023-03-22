@@ -14,7 +14,7 @@ using namespace std;
 
 const int FRAME_INTERVAL = 10;
 NBody nb;
-DirectSum alg(nb.bodies);
+BarnesHut alg(nb.bodies);
 void updateDots()
 {
      static int frame_count = 0;

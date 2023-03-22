@@ -22,6 +22,7 @@ public:
     Vector operator/(double v);
     Vector& operator+=(const Vector& rhs);
     bool operator==(const Vector &rhs);
+    bool operator!=(const Vector &rhs);
     Vector &operator=(const Vector &other);
     Vector &operator=(Vector &&other) noexcept;
     friend std::ostream &operator<<(std::ostream &os, const Vector &vt);

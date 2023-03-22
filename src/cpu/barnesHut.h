@@ -19,6 +19,7 @@ class BarnesHut
     void calculateAcceleration();
     void calculateVelocity();
     void calculatePosition();
+    bool isCollide(Body b1, Body b2);
 
 public:
     std::unique_ptr<QuadTree> quadTree;

@@ -83,6 +83,11 @@ bool Vector::operator==(const Vector &rhs)
     return x == rhs.x && y == rhs.y;
 }
 
+bool Vector::operator!=(const Vector &rhs)
+{
+    return x != rhs.x || y != rhs.y;
+}
+
 std::ostream &operator<<(std::ostream &os, const Vector &vt)
 {
 

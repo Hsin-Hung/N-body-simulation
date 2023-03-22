@@ -11,7 +11,6 @@ void BarnesHut::constructQuadTree()
         quadTree->insert(body);
     }
     updateCM(quadTree);
-
 }
 void BarnesHut::calculateForceHelper(std::unique_ptr<QuadTree> &root, std::shared_ptr<Body> body)
 {
@@ -20,7 +19,11 @@ void BarnesHut::calculateForceHelper(std::unique_ptr<QuadTree> &root, std::share
 
     if (root->b && root->b != body)
     {
+
         Body &bi = *body, &bj = *root->b;
+        if (isCollide(bi, bj))
+            return;
+      
         Vector rij = bj.position - bi.position;
         double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + epsilon * epsilon, -1.5);
         Vector force = rij * ((GRAVITY * bj.mass) / inv_r3);
@@ -53,6 +56,7 @@ void BarnesHut::calculateAcceleration()
 {
     for (auto &body : bodies)
     {
+        body->acceleration = Vector(0, 0);
         calculateForce(body);
     }
 }
@@ -60,7 +64,7 @@ void BarnesHut::calculateVelocity()
 {
     for (auto &body : bodies)
     {
-        body->velocity += body->acceleration * dt/2.0;
+        body->velocity += body->acceleration * dt / 2.0;
     }
 }
 
@@ -100,4 +104,10 @@ void BarnesHut::update()
     constructQuadTree();
     calculateAcceleration();
     calculateVelocity();
+
+}
+bool BarnesHut::isCollide(Body b1, Body b2)
+{
+
+    return b1.radius + b2.radius > b1.position.getDistance(b2.position);
 }
