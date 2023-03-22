@@ -8,13 +8,14 @@
 class NBody
 {
 public:
-    int n;
+    const int n = 20;
     int timeSteps;
     std::vector<std::shared_ptr<Body>> bodies;
 
     NBody();
     void simulate();
     void display();
+    void initBodies();
 };
 
 #endif

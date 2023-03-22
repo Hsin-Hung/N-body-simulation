@@ -8,7 +8,9 @@
 #define THETA 0.5
 class BarnesHut
 {
-    int n;
+    const double epsilon = 0.5;
+    const double dt = 0.1;
+    const int n;
 
     std::vector<std::shared_ptr<Body>> &bodies;
     void constructQuadTree();

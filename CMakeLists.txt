@@ -28,9 +28,20 @@ message(STATUS " - ${CMAKE_GENERATOR}")
 message(STATUS " - ${CMAKE_BUILD_TOOL}")
 message(STATUS)
 
-file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp)
+find_package(OpenGL REQUIRED)
+
+if(NOT OPENGL_FOUND)
+    message(FATAL_ERROR "OpenGL not found")
+endif()
+
+find_package(glfw3 3.3 REQUIRED)
+
+if(NOT glfw3_FOUND)
+    message(FATAL_ERROR "GLFW not found")
+endif()
+
+file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/src/cpu/*.cpp)
 
 add_executable(NBody ${PROJECT_SOURCE_DIR}/src/main.cpp ${SRC_FILES})
-
-target_include_directories(NBody PRIVATE ${PROJECT_SOURCE_DIR}/src)
-# target_link_libraries(NBody OpenGL::GL GLEW::GLEW glfw sfml-graphics)
+target_include_directories(NBody PRIVATE ${PROJECT_SOURCE_DIR}/src/cpu ${GL_INCLUDE_DIRS} ${GLFW_INCLUDE_DIRS})
+target_link_libraries(NBody OpenGL::GL glfw)

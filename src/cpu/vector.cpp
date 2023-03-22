@@ -59,6 +59,25 @@ Vector Vector::operator*(double v)
 {
     return Vector(x * v, y * v);
 }
+
+Vector Vector::operator*(Vector v)
+{
+
+    return Vector(x * v.x, y * v.y);
+}
+
+Vector Vector::operator/(double v)
+{
+
+    return Vector(x / v, y / v);
+}
+
+Vector &Vector::operator+=(const Vector &rhs)
+{
+    x += rhs.x;
+    y += rhs.y;
+    return *this;
+}
 bool Vector::operator==(const Vector &rhs)
 {
     return x == rhs.x && y == rhs.y;

@@ -18,6 +18,9 @@ public:
     Vector operator+(const Vector &rhs);
     Vector operator-(const Vector &rhs);
     Vector operator*(double v);
+    Vector operator*(Vector v);
+    Vector operator/(double v);
+    Vector& operator+=(const Vector& rhs);
     bool operator==(const Vector &rhs);
     Vector &operator=(const Vector &other);
     Vector &operator=(Vector &&other) noexcept;
