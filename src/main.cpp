@@ -7,22 +7,14 @@
 #include "directSum.h"
 #include "barnesHut.h"
 #include "quadtree.h"
-#define NUM_BODIES 5
-#define WINDOW_WIDTH 1600
-#define WINDOW_HEIGHT 1600
+#include "constants.h"
 using namespace std;
 
-const int FRAME_INTERVAL = 10;
-NBody nb;
+NBody nb(NUM_BODIES);
 BarnesHut alg(nb.bodies);
+
 void updateDots()
 {
-     static int frame_count = 0;
-
-     // if (++frame_count < FRAME_INTERVAL)
-     //      return;
-
-     frame_count = 0;
      alg.update();
 }
 
@@ -30,13 +22,14 @@ void drawDots()
 {
 
      glColor3f(1.0, 1.0, 1.0); // set drawing color to white
-     glPointSize(10.0);         // set point size to 5 pixels
-     glBegin(GL_POINTS);       // start drawing points
+
      for (auto &body : nb.bodies)
      {
+          glPointSize(body->radius/5.0);  // set point size to 5 pixels
+          glBegin(GL_POINTS); // start drawing points
           glVertex2f(body->position.x, body->position.y);
+          glEnd(); // end drawing points
      }
-     glEnd(); // end drawing points
 }
 
 void display()
@@ -49,13 +42,8 @@ void display()
 
 int main()
 {
-     // for (int i = 0; i < 10; ++i)
-     // {
-     //      alg.update();
-     //      nb.display();
-     // }
+
      // initialize GLFW
-    
      if (!glfwInit())
           return -1;
      GLFWwindow *window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "OpenGL Point", NULL, NULL); // create window

@@ -8,7 +8,7 @@
 class DirectSum
 {
     const double epsilon = 0.5;
-    const double dt = 0.1;
+    const double dt = 0.001;
     int n;
     std::vector<std::shared_ptr<Body>> &bodies;
 
@@ -19,7 +19,7 @@ class DirectSum
     bool isCollide(Body b1, Body b2);
 
 public:
-    DirectSum(std::vector<std::shared_ptr<Body>> &bodies);
+    DirectSum(std::vector<std::shared_ptr<Body>> &bs);
     void update();
 };
 

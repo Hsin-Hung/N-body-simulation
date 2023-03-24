@@ -9,8 +9,7 @@ public:
     double y;
 
     Vector() : Vector(0, 0) {}
-    Vector(double x, double y) : x(x), y(y) {
-    }
+    Vector(double x, double y) : x(x), y(y){}
     Vector(const Vector &vt);
     Vector(Vector &&vt) noexcept;
     double mod();
@@ -20,7 +19,7 @@ public:
     Vector operator*(double v);
     Vector operator*(Vector v);
     Vector operator/(double v);
-    Vector& operator+=(const Vector& rhs);
+    Vector &operator+=(const Vector &rhs);
     bool operator==(const Vector &rhs);
     bool operator!=(const Vector &rhs);
     Vector &operator=(const Vector &other);

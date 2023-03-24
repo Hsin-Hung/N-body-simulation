@@ -6,7 +6,7 @@
 #include <math.h>
 #include <iostream>
 
-#define N 100
+#define N 20
 
 __global__ void DirectSumKernel(Body *bodies, int n)
 {

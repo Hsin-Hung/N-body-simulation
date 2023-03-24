@@ -1,11 +1,12 @@
 #include <math.h>
 #include "barnesHut.h"
+#include "constants.h"
 
-BarnesHut::BarnesHut(std::vector<std::shared_ptr<Body>> &bodies) : bodies(bodies), n(bodies.size()) {}
+BarnesHut::BarnesHut(std::vector<std::shared_ptr<Body>> &bs) : bodies(bs), n(bs.size()) {}
 
 void BarnesHut::constructQuadTree()
 {
-    quadTree = std::make_unique<QuadTree>(Vector(0, 1650), Vector(1650, 0));
+    quadTree = std::make_unique<QuadTree>(Vector(0, WINDOW_HEIGHT), Vector(WINDOW_WIDTH, 0));
     for (auto &body : bodies)
     {
         quadTree->insert(body);
@@ -17,13 +18,13 @@ void BarnesHut::calculateForceHelper(std::unique_ptr<QuadTree> &root, std::share
     if (!root)
         return;
 
-    if (root->b && root->b != body)
+    if (root->b)
     {
 
         Body &bi = *body, &bj = *root->b;
-        if (isCollide(bi, bj))
+        if (isCollide(bi, bj) || root->b == body)
             return;
-      
+
         Vector rij = bj.position - bi.position;
         double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + epsilon * epsilon, -1.5);
         Vector force = rij * ((GRAVITY * bj.mass) / inv_r3);
@@ -36,6 +37,8 @@ void BarnesHut::calculateForceHelper(std::unique_ptr<QuadTree> &root, std::share
     {
         Body &bi = *body;
         Vector rij = root->centerMass - bi.position;
+        if (bi.radius * 2 > bi.position.getDistance(root->centerMass))
+            return;
         double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + epsilon * epsilon, -1.5);
         Vector force = rij * ((GRAVITY * root->totalMass) / inv_r3);
         bi.acceleration += (force / bi.mass);
@@ -56,22 +59,30 @@ void BarnesHut::calculateAcceleration()
 {
     for (auto &body : bodies)
     {
-        body->acceleration = Vector(0, 0);
-        calculateForce(body);
+        if (body->isDynamic)
+        {
+            body->acceleration = Vector(0, 0);
+            calculateForce(body);
+        }
     }
 }
 void BarnesHut::calculateVelocity()
 {
+    double mag = 0.0;
     for (auto &body : bodies)
     {
         body->velocity += body->acceleration * dt / 2.0;
+        mag = std::max(mag, sqrt(body->velocity.x * body->velocity.x + body->velocity.y * body->velocity.y));
     }
+    std::cout << mag << std::endl;
 }
 
 void BarnesHut::calculatePosition()
 {
 
-    int boundaryWidth = 1600, boundaryHeight = 1600;
+    int boundaryWidth = WINDOW_WIDTH, boundaryHeight = WINDOW_HEIGHT;
+
+    // check if body is at boundary
     for (auto &body : bodies)
     {
         body->position += body->velocity * dt;
@@ -104,7 +115,6 @@ void BarnesHut::update()
     constructQuadTree();
     calculateAcceleration();
     calculateVelocity();
-
 }
 bool BarnesHut::isCollide(Body b1, Body b2)
 {

@@ -5,11 +5,11 @@
 #include "body.h"
 #include "quadtree.h"
 #include "constants.h"
-#define THETA 0.5
+#define THETA 0.3
 class BarnesHut
 {
     const double epsilon = 0.5;
-    const double dt = 0.1;
+    const double dt = 0.005;
     const int n;
 
     std::vector<std::shared_ptr<Body>> &bodies;
@@ -23,7 +23,7 @@ class BarnesHut
 
 public:
     std::unique_ptr<QuadTree> quadTree;
-    BarnesHut(std::vector<std::shared_ptr<Body>> &bodies);
+    BarnesHut(std::vector<std::shared_ptr<Body>> &bs);
     void update();
 };
 

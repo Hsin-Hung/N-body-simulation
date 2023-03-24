@@ -1,6 +1,9 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-const double GRAVITY = 6.67E-11;
+#define NUM_BODIES 50
+#define WINDOW_WIDTH 1600
+#define WINDOW_HEIGHT 1600
+#define GRAVITY 6.67E-11
 
 #endif
