@@ -9,7 +9,7 @@
 #include <opencv2/opencv.hpp>
 #include "constants.h"
 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 256
 
 cv::VideoWriter video("nbody.avi", cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, cv::Size(WINDOW_WIDTH, WINDOW_HEIGHT));
 
@@ -106,12 +106,82 @@ __global__ void DirectSumKernel(Body *bodies, int n)
         Body &bi = bodies[i];
         if (bi.isDynamic)
         {
-            calculateVelocity(bi);
-            calculatePosition(bi);
-            __syncthreads();
-            calculateAcceleration(bi, i, bodies, n);
-            calculateVelocity(bi);
+
+            bi.velocity.x += bi.acceleration.x * DT / 2.0;
+            bi.velocity.y += bi.acceleration.y * DT / 2.0;
+
+            bi.position.x += bi.velocity.x * DT;
+            bi.position.y += bi.velocity.y * DT;
+
+            bi.acceleration = {0.0, 0.0};
+            for (int b = 0; b < n; ++b)
+            {
+                if (b != i)
+                {
+                    Body &bj = bodies[b];
+                    if (!isCollide(bi, bj))
+                    {
+                        Vector rij = {bj.position.x - bi.position.x, bj.position.y - bi.position.y};
+                        double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
+                        double f = (GRAVITY * bj.mass) / inv_r3;
+                        Vector force = {rij.x * f, rij.y * f};
+                        bi.acceleration.x += (force.x / bi.mass);
+                        bi.acceleration.y += (force.y / bi.mass);
+                    }
+                }
+            }
+            bi.velocity.x += bi.acceleration.x * DT / 2.0;
+            bi.velocity.y += bi.acceleration.y * DT / 2.0;
         }
+    }
+}
+
+__global__ void DirectSumKernel_Tiled(Body *bodies, int n)
+{
+    __shared__ Body Bds[BLOCK_SIZE];
+
+    int bx = blockIdx.x, by = blockIdx.y;
+    int tx = threadIdx.x, ty = threadIdx.y;
+    int i = bx * blockDim.x + tx;
+
+    if (i < n)
+    {
+        Body &bi = bodies[i];
+        double fx = 0.0, fy = 0.0;
+        bi.velocity.x += bi.acceleration.x * DT / 2.0;
+        bi.velocity.y += bi.acceleration.y * DT / 2.0;
+        bi.position.x += bi.velocity.x * DT;
+        bi.position.y += bi.velocity.y * DT;
+        bi.acceleration = {0.0, 0.0};
+        for (int tile = 0; tile < gridDim.x; ++tile)
+        {
+
+            Bds[tx] = bodies[tile * blockDim.x + tx];
+            __syncthreads();
+
+            for (int b = 0; b < BLOCK_SIZE; ++b)
+            {
+                int j = tile * blockDim.x + b;
+                if (j < n)
+                {
+                    Body bj = Bds[b];
+                    if (!isCollide(bi, bj))
+                    {
+                        Vector rij = {bj.position.x - bi.position.x, bj.position.y - bi.position.y};
+                        double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
+                        double f = (GRAVITY * bj.mass) / inv_r3;
+                        Vector force = {rij.x * f, rij.y * f};
+                        fx += (force.x / bi.mass);
+                        fy += (force.y / bi.mass);
+                    }
+                }
+            }
+            __syncthreads();
+        }
+        bi.acceleration.x += fx;
+        bi.acceleration.y += fy;
+        bi.velocity.x += bi.acceleration.x * DT / 2.0;
+        bi.velocity.y += bi.acceleration.y * DT / 2.0;
     }
 }
 
@@ -190,13 +260,13 @@ int main(int argc, char **argv)
     Body *d_bodies;
     cudaMalloc((void **)&d_bodies, bytes);
 
-    int blockSize = BLOCK_SIZE * BLOCK_SIZE;
+    int blockSize = BLOCK_SIZE;
     int gridSize = ceil((double)nBodies / blockSize);
     int it = 0;
     while (it < iters) // main loop
     {
         cudaMemcpy(d_bodies, bodies, bytes, cudaMemcpyHostToDevice);
-        DirectSumKernel<<<gridSize, blockSize>>>(d_bodies, nBodies);
+        DirectSumKernel_Tiled<<<gridSize, blockSize>>>(d_bodies, nBodies);
         cudaMemcpy(bodies, d_bodies, bytes, cudaMemcpyDeviceToHost);
         storeFrame(bodies, nBodies, it);
         // display(bodies);
