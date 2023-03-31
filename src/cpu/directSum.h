@@ -8,7 +8,7 @@
 class DirectSum
 {
     const double epsilon = 0.5;
-    const double dt = 0.001;
+    const double dt = 0.005;
     int n;
     std::vector<std::shared_ptr<Body>> &bodies;
 
