@@ -4,9 +4,22 @@
 
 BarnesHut::BarnesHut(std::vector<std::shared_ptr<Body>> &bs) : bodies(bs), n(bs.size()) {}
 
+void BarnesHut::computeBoundingBox()
+{
+    Vector topLeft = Vector(INFINITY, -INFINITY), botRight = Vector(-INFINITY, INFINITY);
+    for (auto &body : bodies)
+    {
+        topLeft.x = fminf(topLeft.x, body->position.x);
+        topLeft.y = fmaxf(topLeft.y, body->position.y);
+        botRight.x = fmaxf(botRight.x, body->position.x);
+        botRight.y = fminf(botRight.y, body->position.y);
+    }
+
+    quadTree = std::make_unique<QuadTree>(topLeft, botRight);
+}
+
 void BarnesHut::constructQuadTree()
 {
-    quadTree = std::make_unique<QuadTree>(Vector(0, WINDOW_HEIGHT), Vector(WINDOW_WIDTH, 0));
     for (auto &body : bodies)
     {
         quadTree->insert(body);
@@ -112,6 +125,7 @@ void BarnesHut::update()
 {
     calculateVelocity();
     calculatePosition();
+    computeBoundingBox();
     constructQuadTree();
     calculateAcceleration();
     calculateVelocity();

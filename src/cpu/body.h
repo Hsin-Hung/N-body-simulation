@@ -15,7 +15,6 @@ public:
     Vector acceleration;
 
     Body(double m, double r, Vector p, Vector v, Vector a, bool d = true) : mass(m), radius(r), position(p), velocity(v), acceleration(a), isDynamic(d) {}
-
     friend std::ostream &operator<<(std::ostream &os, const Body &b);
 };
 

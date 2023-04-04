@@ -15,6 +15,7 @@ class BarnesHut
     std::vector<std::shared_ptr<Body>> &bodies;
     void constructQuadTree();
     void calculateForceHelper(std::unique_ptr<QuadTree> &root, std::shared_ptr<Body> body);
+    void computeBoundingBox();
     void calculateForce(std::shared_ptr<Body> b);
     void calculateAcceleration();
     void calculateVelocity();
