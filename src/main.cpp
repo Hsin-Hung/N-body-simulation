@@ -11,7 +11,7 @@
 using namespace std;
 
 NBody nb(NUM_BODIES);
-DirectSum alg(nb.bodies);
+BarnesHut alg(nb.bodies);
 
 void updateDots()
 {
