@@ -8,13 +8,17 @@ dim3 blockSize = BLOCK_SIZE;
 BarnesHutCuda::BarnesHutCuda(int n) : nBodies(n)
 {
     nNodes = MAX_NODES;
-    leaf_limit = MAX_NODES - N_LEAF;
+    leafLimit = MAX_NODES - N_LEAF;
     h_b = new Body[n];
     h_node = new Node[nNodes];
+    h_topLeft = new Vector;
+    h_botRight = new Vector;
 
-    // cudaMalloc((void **)&d_b, sizeof(Body) * n);
-    // cudaMalloc((void **)&d_node, sizeof(Node) * nNodes);
-    // cudaMalloc((void **)&d_mutex, sizeof(int));
+    cudaMalloc((void **)&d_b, sizeof(Body) * n);
+    cudaMalloc((void **)&d_node, sizeof(Node) * nNodes);
+    cudaMalloc((void **)&d_mutex, sizeof(int) * nNodes);
+    cudaMalloc((void **)&d_topLeft, sizeof(Vector));
+    cudaMalloc((void **)&d_botRight, sizeof(Vector));
 }
 
 BarnesHutCuda::~BarnesHutCuda()
@@ -22,9 +26,13 @@ BarnesHutCuda::~BarnesHutCuda()
 
     delete[] h_b;
     delete[] h_node;
-    // cudaFree(d_b);
-    // cudaFree(d_node);
-    // cudaFree(d_mutex);
+    delete h_topLeft;
+    delete h_botRight;
+    cudaFree(d_b);
+    cudaFree(d_node);
+    cudaFree(d_mutex);
+    cudaFree(d_topLeft);
+    cudaFree(d_botRight);
 }
 
 void BarnesHutCuda::computeBoundingBox()
@@ -37,8 +45,9 @@ void BarnesHutCuda::computeBoundingBox()
         botRight.x = fmaxf(botRight.x, h_b[i].position.x);
         botRight.y = fminf(botRight.y, h_b[i].position.y);
     }
-    h_node[0].topLeft = topLeft;
-    h_node[0].botRight = botRight;
+
+    *h_topLeft = {topLeft.x - 1, topLeft.y + 1};
+    *h_botRight = {botRight.x + 1, botRight.y - 1};
 }
 
 int BarnesHutCuda::getQuadrant(Vector topLeft, Vector botRight, double x, double y)
@@ -74,123 +83,108 @@ int BarnesHutCuda::getQuadrant(Vector topLeft, Vector botRight, double x, double
 
 bool BarnesHutCuda::inBoundary(Vector topLeft, Vector botRight, Vector p)
 {
+    // std::cout << "inBoundary TR After: " << topLeft.x << " " << topLeft.y << " ";
+    // std::cout << "inBoundary BT After: " << botRight.x << " " << botRight.y << " ";
+    // std::cout << "inBoundary Body: " << p.x << " " << p.y << " " << std::endl;
+
     return (p.x >= topLeft.x && p.x <= botRight.x && p.y <= topLeft.y && p.y >= botRight.y);
 }
 
-void BarnesHutCuda::insertQuadTree(int nodeIndex, int b)
+void BarnesHutCuda::updateBound(Vector &tl, Vector &br, int quadrant)
 {
-
-    if (nodeIndex >= nNodes)
-    {
-        std::cout << "index out of bound" << std::endl;
-        return;
-    }
-
-    Node &curNode = h_node[nodeIndex];
-    Body &body = h_b[b];
-
-    if (!inBoundary(curNode.topLeft, curNode.botRight, body.position))
-    {
-        std::cout << "wrong quat" << std::endl;
-        return;
-    }
-
-    if (nodeIndex >= leaf_limit)
-    {
-
-        if (curNode.centerMass.x != -1)
-        {
-
-            double M = curNode.totalMass + body.mass;
-            double Rx = (curNode.totalMass * curNode.centerMass.x + body.mass * curNode.centerMass.x) / M;
-            double Ry = (curNode.totalMass * curNode.centerMass.y + body.mass * curNode.centerMass.y) / M;
-            curNode.totalMass = M;
-            curNode.centerMass = {Rx, Ry};
-        }
-        else
-        {
-            curNode.centerMass = body.position;
-            curNode.totalMass = body.mass;
-        }
-
-        return;
-    }
-
-    // If node x does not contain a body, put the new body here.
-    if (curNode.isLeaf)
-    {
-
-        if (curNode.centerMass.x != -1)
-        {
-
-            int quadrant = getQuadrant(curNode.topLeft, curNode.botRight, curNode.centerMass.x, curNode.centerMass.y);
-            Node &childNode = h_node[((nodeIndex * 4) + quadrant)];
-
-            if (quadrant == 1)
-            {
-                childNode.topLeft = {(curNode.topLeft.x + curNode.botRight.x) / 2, curNode.topLeft.y};
-                childNode.botRight = {curNode.botRight.x, (curNode.topLeft.y + curNode.botRight.y) / 2};
-            }
-            else if (quadrant == 2)
-            {
-                childNode.topLeft = {curNode.topLeft.x, curNode.topLeft.y};
-                childNode.botRight = {(curNode.topLeft.x + curNode.botRight.x) / 2, (curNode.topLeft.y + curNode.botRight.y) / 2};
-            }
-            else if (quadrant == 3)
-            {
-                childNode.topLeft = {curNode.topLeft.x, (curNode.topLeft.y + curNode.botRight.y) / 2};
-                childNode.botRight = {(curNode.topLeft.x + curNode.botRight.x) / 2, curNode.botRight.y};
-            }
-            else
-            {
-                childNode.topLeft = {(curNode.topLeft.x + curNode.botRight.x) / 2, (curNode.topLeft.y + curNode.botRight.y) / 2};
-                childNode.botRight = {curNode.botRight.x, curNode.botRight.y};
-            }
-
-            childNode.centerMass = curNode.centerMass;
-            childNode.totalMass = curNode.totalMass;
-
-            curNode.centerMass = {-1, -1};
-            curNode.totalMass = 0.0;
-            curNode.isLeaf = false;
-        }
-        else
-        {
-            curNode.centerMass = body.position;
-            curNode.totalMass = body.mass;
-            return;
-        }
-    }
-
-    int quadrant = getQuadrant(curNode.topLeft, curNode.botRight, body.position.x, body.position.y);
-    Node &childNode = h_node[((nodeIndex * 4) + quadrant)];
     if (quadrant == 1)
     {
-        childNode.topLeft = {(curNode.topLeft.x + curNode.botRight.x) / 2, curNode.topLeft.y};
-        childNode.botRight = {curNode.botRight.x, (curNode.topLeft.y + curNode.botRight.y) / 2};
+        tl = {(tl.x + br.x) / 2, tl.y};
+        br = {br.x, (tl.y + br.y) / 2};
     }
     else if (quadrant == 2)
     {
-        childNode.topLeft = {curNode.topLeft.x, curNode.topLeft.y};
-        childNode.botRight = {(curNode.topLeft.x + curNode.botRight.x) / 2, (curNode.topLeft.y + curNode.botRight.y) / 2};
+        tl = {tl.x, tl.y};
+        br = {(tl.x + br.x) / 2, (tl.y + br.y) / 2};
     }
     else if (quadrant == 3)
     {
-        childNode.topLeft = {curNode.topLeft.x, (curNode.topLeft.y + curNode.botRight.y) / 2};
-        childNode.botRight = {(curNode.topLeft.x + curNode.botRight.x) / 2, curNode.botRight.y};
+        tl = {tl.x, (tl.y + br.y) / 2};
+        br = {(tl.x + br.x) / 2, br.y};
     }
     else
     {
-        childNode.topLeft = {(curNode.topLeft.x + curNode.botRight.x) / 2, (curNode.topLeft.y + curNode.botRight.y) / 2};
-        childNode.botRight = {curNode.botRight.x, curNode.botRight.y};
+        tl = {(tl.x + br.x) / 2, (tl.y + br.y) / 2};
+        br = {br.x, br.y};
     }
+}
 
-    // std::cout << "Cur Node TL(" << curNode.topLeft.x << "," << curNode.topLeft.y << ") ";
-    // std::cout << "BR(" << curNode.botRight.x << "," << curNode.botRight.y << ") ";
-    // std::cout << "Body Pos (" << body.position.x << "," << body.position.y << ") ";
-    // std::cout << "Quat " << quadrant << std::endl;
+void BarnesHutCuda::insertQuadTree(int nodeIndex, int b, Vector tl, Vector br)
+{
 
-    insertQuadTree((nodeIndex * 4) + quadrant, b);
+    Body &body = h_b[b];
+    while (nodeIndex < nNodes)
+    {
+
+        Node &curNode = h_node[nodeIndex];
+
+        if (!inBoundary(tl, br, body.position))
+        {
+            std::cout << "wrong quat" << std::endl;
+            break;
+        }
+
+        if (nodeIndex >= leafLimit)
+        {
+
+            if (curNode.centerMass.x != -1)
+            {
+
+                double M = curNode.totalMass + body.mass;
+                double Rx = (curNode.totalMass * curNode.centerMass.x + body.mass * curNode.centerMass.x) / M;
+                double Ry = (curNode.totalMass * curNode.centerMass.y + body.mass * curNode.centerMass.y) / M;
+                curNode.totalMass = M;
+                curNode.centerMass = {Rx, Ry};
+            }
+            else
+            {
+                curNode.centerMass = body.position;
+                curNode.totalMass = body.mass;
+            }
+
+            break;
+        }
+
+        // If node x does not contain a body, put the new body here.
+        if (curNode.isLeaf)
+        {
+
+            if (curNode.centerMass.x != -1)
+            {
+
+                int quadrant = getQuadrant(tl, br, curNode.centerMass.x, curNode.centerMass.y);
+                Node &childNode = h_node[(nodeIndex * 4) + quadrant];
+
+                childNode.centerMass = curNode.centerMass;
+                childNode.totalMass = curNode.totalMass;
+
+                curNode.centerMass = {-1, -1};
+                curNode.totalMass = 0.0;
+                curNode.isLeaf = false;
+            }
+            else
+            {
+                curNode.centerMass = body.position;
+                curNode.totalMass = body.mass;
+                break;
+            }
+        }
+
+        int quadrant = getQuadrant(tl, br, body.position.x, body.position.y);
+        // std::cout << "TR Before: " << tl.x << " " << tl.y << " ";
+        // std::cout << "BT Before: " << br.x << " " << br.y << " ";
+        updateBound(tl, br, quadrant);
+        nodeIndex = (nodeIndex * 4) + quadrant;
+        // std::cout << "TR After: " << tl.x << " " << tl.y << " ";
+        // std::cout << "BT After: " << br.x << " " << br.y << " ";
+        // std::cout << "Body: " << body.position.x << " " << body.position.y << " ";
+        // std::cout << "QD: " << quadrant << std::endl;
+    }
 }
 
 void BarnesHutCuda::constructQuadTree()
@@ -198,7 +192,7 @@ void BarnesHutCuda::constructQuadTree()
 
     for (int i = 0; i < nBodies; ++i)
     {
-        insertQuadTree(0, i);
+        insertQuadTree(0, i, *h_topLeft, *h_botRight);
     }
 }
 double BarnesHutCuda::getTotalMass(int nodeIndex)
@@ -283,18 +277,12 @@ double BarnesHutCuda::getDistance(Vector pos1, Vector pos2)
     return sqrt(pow(pos1.x - pos2.x, 2) + pow(pos1.y - pos2.y, 2));
 }
 
-double BarnesHutCuda::getWidth(Node &root)
-{
-
-    return root.botRight.x - root.topLeft.x;
-}
-
 bool BarnesHutCuda::isCollide(Body &b1, Body &b2)
 {
     return b1.radius + b2.radius > getDistance(b1.position, b2.position);
 }
 
-void BarnesHutCuda::computeForceHelper(int nodeIndex, int b)
+void BarnesHutCuda::computeForceHelper(int nodeIndex, int b, double width)
 {
 
     if (nodeIndex >= nNodes)
@@ -325,7 +313,7 @@ void BarnesHutCuda::computeForceHelper(int nodeIndex, int b)
         return;
     }
 
-    double sd = getWidth(curNode) / getDistance(bi.position, curNode.centerMass);
+    double sd = width / getDistance(bi.position, curNode.centerMass);
     if (sd < THETA)
     {
         Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
@@ -339,10 +327,10 @@ void BarnesHutCuda::computeForceHelper(int nodeIndex, int b)
         return;
     }
 
-    computeForceHelper((nodeIndex * 4) + 1, b);
-    computeForceHelper((nodeIndex * 4) + 2, b);
-    computeForceHelper((nodeIndex * 4) + 3, b);
-    computeForceHelper((nodeIndex * 4) + 4, b);
+    computeForceHelper((nodeIndex * 4) + 1, b, width / 2.0);
+    computeForceHelper((nodeIndex * 4) + 2, b, width / 2.0);
+    computeForceHelper((nodeIndex * 4) + 3, b, width / 2.0);
+    computeForceHelper((nodeIndex * 4) + 4, b, width / 2.0);
 }
 
 void BarnesHutCuda::computeForce()
@@ -362,7 +350,7 @@ void BarnesHutCuda::computeForce()
             bi.position.y += bi.velocity.y * DT;
 
             bi.acceleration = {0.0, 0.0};
-            computeForceHelper(0, i);
+            computeForceHelper(0, i, h_botRight->x - h_topLeft->x);
             bi.velocity.x += bi.acceleration.x * DT / 2.0;
             bi.velocity.y += bi.acceleration.y * DT / 2.0;
         }
@@ -374,32 +362,29 @@ void BarnesHutCuda::reset()
     for (int b = 0; b < nNodes; ++b)
     {
 
-        h_node[b].topLeft = {-1, -1};
-        h_node[b].botRight = {-1, -1};
         h_node[b].centerMass = {-1, -1};
         h_node[b].totalMass = 0.0;
         h_node[b].isLeaf = true;
     }
 
-    h_node[0].topLeft = {INFINITY, -INFINITY};
-    h_node[0].botRight = {-INFINITY, INFINITY};
+    *h_topLeft = {INFINITY, -INFINITY};
+    *h_botRight = {-INFINITY, INFINITY};
 }
 
 void BarnesHutCuda::setup()
 {
     randomInitBodies();
-    for (int i = 0; i < nBodies; ++i)
-    {
-        std::cout << "Set up Body " << h_b[i].position.x << " " << h_b[i].position.y << "\n"
-                  << std::endl;
-    }
-    // cudaMemcpy(d_b, h_b, sizeof(Body) * nBodies, cudaMemcpyHostToDevice);
-    // cudaMemcpy(d_node, h_node, sizeof(Node) * nNodes, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_b, h_b, sizeof(Body) * nBodies, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_node, h_node, sizeof(Node) * nNodes, cudaMemcpyHostToDevice);
 }
 void BarnesHutCuda::update()
 {
     reset();
+    // ResetKernel<<<gridSize, blockSize>>>(d_node, d_topLeft, d_botRight, d_mutex, nNodes);
+    // ComputeBoundingBox<<<gridSize, blockSize>>>(d_node, d_b, d_topLeft, d_botRight, d_mutex, nBodies);
+    // ConstructQuadTreeKernel<<<gridSize, blockSize>>>(d_node, d_b, d_topLeft, d_botRight, d_mutex, nNodes, nBodies, leafLimit);
     computeBoundingBox();
+    // std::cout << h_topLeft->x << " " << h_topLeft->y << " " << h_botRight->x << " " << h_botRight->y << std::endl;
     constructQuadTree();
     computeCenterMass(0);
     computeForce();

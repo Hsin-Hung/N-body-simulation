@@ -20,9 +20,6 @@ typedef struct
 
 typedef struct
 {
-
-    Vector topLeft;
-    Vector botRight;
     Vector centerMass;
     double totalMass;
     bool isLeaf;
@@ -33,23 +30,27 @@ class BarnesHutCuda
 {
     int nBodies;
     int nNodes;
-    int leaf_limit;
+    int leafLimit;
 
     Body *h_b;
     Node *h_node;
+    Vector *h_topLeft;
+    Vector *h_botRight;
 
     Body *d_b;
     Node *d_node;
     int *d_mutex;
+    Vector *d_topLeft;
+    Vector *d_botRight;
 
     bool inBoundary(Vector topLeft, Vector botRight, Vector p);
     int getQuadrant(Vector topLeft, Vector botRight, double x, double y);
     void randomInitBodies();
     double getTotalMass(int nodeIndex);
-    void insertQuadTree(int nodeIndex, int b);
-    void computeForceHelper(int nodeIndex, int b);
+    void insertQuadTree(int nodeIndex, int b, Vector tl, Vector br);
+    void computeForceHelper(int nodeIndex, int b, double width);
+    void updateBound(Vector &tl, Vector &br, int quadrant);
     double getDistance(Vector pos1, Vector pos2);
-    double getWidth(Node &root);
     bool isCollide(Body &b1, Body &b2);
 
 public:

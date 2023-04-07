@@ -1,5 +1,5 @@
-#ifndef BARNES_HUT_KERNEL_H_
-#define BARNES_HUT_KERNEL_H_
+#ifndef BARNES_HUT_KERNEL_
+#define BARNES_HUT_KERNEL_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,79 +10,238 @@
 #include "barnesHutCuda.cuh"
 #include "barnesHut_kernel.cuh"
 
-// __global__ void ResetKernel(Node *node, int *mutex, int nNodes)
-// {
-//     int b = blockIdx.x * blockDim.x + threadIdx.x;
+/*
+----------------------------------------------------------------------------------------
+RESET KERNEL
+----------------------------------------------------------------------------------------
+*/
+__global__ void ResetKernel(Node *node, Vector *topLeft, Vector *botRight, int *mutex, int nNodes)
+{
+    int b = blockIdx.x * blockDim.x + threadIdx.x;
 
-//     if (b < nNodes)
-//     {
+    if (b < nNodes)
+    {
 
-//         node[b].topLeft = {-1, -1};
-//         node[b].botRight = {-1, -1};
-//         node[b].centerMass = {-1, -1};
-//         node[b].totalMass = 0.0;
-//         node[b].bi = -1;
-//         node[b].isNull = true;
-//     }
+        node[b].centerMass = {-1, -1};
+        node[b].totalMass = 0.0;
+        node[b].isLeaf = true;
+        mutex[b] = 0;
+    }
 
-//     if (b == 0)
-//     {
-//         node[0].topLeft = {INFINITY, -INFINITY};
-//         node[0].botRight = {-INFINITY, INFINITY};
-//         *mutex = 0;
-//     }
-// }
+    if (b == 0)
+    {
+        *topLeft = {INFINITY, -INFINITY};
+        *botRight = {-INFINITY, INFINITY};
+    }
+}
 
-// __global__ void ComputeBoundingBox(Node *node, Body *bodies, int *mutex, int nBodies)
-// {
+/*
+----------------------------------------------------------------------------------------
+COMPUTE BOUNDING BOX
+----------------------------------------------------------------------------------------
+*/
+__global__ void ComputeBoundingBox(Node *node, Body *bodies, Vector *topLeft, Vector *botRight, int *mutex, int nBodies)
+{
 
-//     __shared__ double topLeftX[BLOCK_SIZE];
-//     __shared__ double topLeftY[BLOCK_SIZE];
-//     __shared__ double botRightX[BLOCK_SIZE];
-//     __shared__ double botRightY[BLOCK_SIZE];
+    __shared__ double topLeftX[BLOCK_SIZE];
+    __shared__ double topLeftY[BLOCK_SIZE];
+    __shared__ double botRightX[BLOCK_SIZE];
+    __shared__ double botRightY[BLOCK_SIZE];
 
-//     int tx = threadIdx.x;
-//     int b = blockIdx.x * blockDim.x + tx;
+    int tx = threadIdx.x;
+    int b = blockIdx.x * blockDim.x + tx;
 
-//     topLeftX[tx] = INFINITY;
-//     topLeftY[tx] = -INFINITY;
-//     botRightX[tx] = -INFINITY;
-//     botRightY[tx] = INFINITY;
+    topLeftX[tx] = INFINITY;
+    topLeftY[tx] = -INFINITY;
+    botRightX[tx] = -INFINITY;
+    botRightY[tx] = INFINITY;
 
-//     __syncthreads();
+    __syncthreads();
 
-//     if (b < nBodies)
-//     {
+    if (b < nBodies)
+    {
+        Body body = bodies[b];
+        topLeftX[tx] = body.position.x;
+        topLeftY[tx] = body.position.y;
+        botRightX[tx] = body.position.x;
+        botRightY[tx] = body.position.y;
+    }
 
-//         topLeftX[tx] = bodies[b].position.x;
-//         topLeftY[tx] = bodies[b].position.y;
-//         botRightX[tx] = bodies[b].position.x;
-//         botRightY[tx] = bodies[b].position.y;
-//     }
+    for (int s = blockDim.x / 2; s > 0; s >>= 1)
+    {
+        __syncthreads();
+        if (tx < s)
+        {
+            topLeftX[tx] = fminf(topLeftX[tx], topLeftX[tx + s]);
+            topLeftY[tx] = fmaxf(topLeftY[tx], topLeftY[tx + s]);
+            botRightX[tx] = fmaxf(botRightX[tx], botRightX[tx + s]);
+            botRightY[tx] = fminf(botRightY[tx], botRightY[tx + s]);
+        }
+    }
 
-//     for (int s = blockDim.x / 2; s > 0; s >>= 1)
-//     {
-//         __syncthreads();
-//         if (tx < s)
-//         {
-//             topLeftX[tx] = fminf(topLeftX[tx], topLeftX[tx + s]);
-//             topLeftY[tx] = fmaxf(topLeftY[tx], topLeftY[tx + s]);
-//             botRightX[tx] = fmaxf(botRightX[tx], botRightX[tx + s]);
-//             botRightY[tx] = fminf(botRightY[tx], botRightY[tx + s]);
-//         }
-//     }
+    if (tx == 0)
+    {
+        while (atomicCAS(mutex, 0, 1) != 0)
+            ;
+        topLeft->x = fminf(topLeft->x, topLeftX[0]);
+        topLeft->y = fmaxf(topLeft->y, topLeftY[0]);
+        botRight->x = fmaxf(botRight->x, botRightX[0]);
+        botRight->y = fminf(botRight->y, botRightY[0]);
+        atomicExch(mutex, 0);
+    }
+}
 
-//     if (tx == 0)
-//     {
-//         while (atomicCAS(mutex, 0, 1) != 0)
-//             ;
-//         node[0].topLeft.x = fminf(node[0].topLeft.x, topLeftX[0]);
-//         node[0].topLeft.y = fmaxf(node[0].topLeft.y, topLeftY[0]);
-//         node[0].botRight.x = fmaxf(node[0].botRight.x, botRightX[0]);
-//         node[0].botRight.y = fminf(node[0].botRight.y, botRightY[0]);
-//         atomicExch(mutex, 0);
-//     }
-// }
+/*
+----------------------------------------------------------------------------------------
+CONSTRUCT QUAD TREE
+----------------------------------------------------------------------------------------
+*/
+
+__device__ int getQuadrant(Vector topLeft, Vector botRight, double x, double y)
+{
+
+    if ((topLeft.x + botRight.x) / 2 >= x)
+    {
+        // Indicates topLeftTree
+        if ((topLeft.y + botRight.y) / 2 <= y)
+        {
+            return 2;
+        }
+        // Indicates botLeftTree
+        else
+        {
+            return 3;
+        }
+    }
+    else
+    {
+        // Indicates topRightTree
+        if ((topLeft.y + botRight.y) / 2 <= y)
+        {
+            return 1;
+        }
+        // Indicates botRightTree
+        else
+        {
+            return 4;
+        }
+    }
+}
+
+__device__ bool inBoundary(Vector tl, Vector br, Vector p)
+{
+    return (p.x >= tl.x && p.x <= br.x && p.y <= tl.y && p.y >= br.y);
+}
+
+__device__ void updateBound(Vector &tl, Vector &br, int quadrant)
+{
+    if (quadrant == 1)
+    {
+        tl = {(tl.x + br.x) / 2, tl.y};
+        br = {br.x, (tl.y + br.y) / 2};
+    }
+    else if (quadrant == 2)
+    {
+        tl = {tl.x, tl.y};
+        br = {(tl.x + br.x) / 2, (tl.y + br.y) / 2};
+    }
+    else if (quadrant == 3)
+    {
+        tl = {tl.x, (tl.y + br.y) / 2};
+        br = {(tl.x + br.x) / 2, br.y};
+    }
+    else
+    {
+        tl = {(tl.x + br.x) / 2, (tl.y + br.y) / 2};
+        br = {br.x, br.y};
+    }
+}
+
+__device__ void ConstructQuadTreeHelper(Node *node, int nodeIndex, Body body, Vector *topLeft, Vector *botRight, int *mutex, int nNodes, int nBodies, int leafLimit)
+{
+
+    Vector tl = *topLeft;
+    Vector br = *botRight;
+
+    while (nodeIndex < nNodes)
+    {
+
+        Node &curNode = node[nodeIndex];
+
+        if (!inBoundary(tl, br, body.position))
+        {
+            break;
+        }
+
+        if (nodeIndex >= leafLimit)
+        {
+            // while (atomicCAS(&mutex[nodeIndex], 0, 1) != 0)
+            //     ;
+            if (curNode.centerMass.x != -1)
+            {
+
+                double M = curNode.totalMass + body.mass;
+                double Rx = (curNode.totalMass * curNode.centerMass.x + body.mass * curNode.centerMass.x) / M;
+                double Ry = (curNode.totalMass * curNode.centerMass.y + body.mass * curNode.centerMass.y) / M;
+                curNode.totalMass = M;
+                curNode.centerMass = {Rx, Ry};
+            }
+            else
+            {
+                curNode.totalMass = body.mass;
+                curNode.centerMass = body.position;
+            }
+            // atomicExch(&mutex[nodeIndex], 0);
+            break;
+        }
+
+        // If node x does not contain a body, put the new body here.
+        if (curNode.isLeaf)
+        {
+            // while (atomicCAS(&mutex[nodeIndex], 0, 1) != 0)
+            //     ;
+            if (curNode.centerMass.x != -1)
+            {
+
+                int quadrant = getQuadrant(tl, br, curNode.centerMass.x, curNode.centerMass.y);
+                Node &childNode = node[((nodeIndex * 4) + quadrant)];
+
+                updateBound(tl, br, quadrant);
+                childNode.centerMass = curNode.centerMass;
+                childNode.totalMass = curNode.totalMass;
+
+                curNode.centerMass = {-1, -1};
+                curNode.totalMass = 0.0;
+                curNode.isLeaf = false;
+            }
+            else
+            {
+
+                curNode.centerMass = body.position;
+                curNode.totalMass = body.mass;
+                // atomicExch(&mutex[nodeIndex], 0);
+                break;
+            }
+            // atomicExch(&mutex[nodeIndex], 0);
+        }
+
+        int quadrant = getQuadrant(tl, br, body.position.x, body.position.y);
+        updateBound(tl, br, quadrant);
+        nodeIndex = (nodeIndex * 4) + quadrant;
+    }
+}
+
+__global__ void ConstructQuadTreeKernel(Node *node, Body *bodies, Vector *topLeft, Vector *botRight, int *mutex, int nNodes, int nBodies, int leafLimit)
+{
+
+    int b = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (b < nBodies)
+    {
+        Body body = bodies[b];
+        ConstructQuadTreeHelper(node, 0, body, topLeft, botRight, mutex, nNodes, nBodies, leafLimit);
+    }
+}
 
 // __device__ double getDistance(Vector pos1, Vector pos2)
 // {

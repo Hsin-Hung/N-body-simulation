@@ -10,7 +10,7 @@
 #define THETA 0.3
 #define CENTERX 800
 #define CENTERY 800
-#define BLOCK_SIZE 256
+#define BLOCK_SIZE 1024
 #define GRID_SIZE 512
 #define MAX_N 102400
 #define MAX_NODES 341376
