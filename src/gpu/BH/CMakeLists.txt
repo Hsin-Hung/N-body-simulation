@@ -1,13 +1,12 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(DirectSum)
+project(BarnesHut)
 
 find_package(OpenCV REQUIRED)
 if(NOT OpenCV_FOUND)
     message(FATAL_ERROR "OpenCV not found")
 endif()
 include_directories(${OpenCV_INCLUDE_DIRS})
-
 
 # Find CUDA
 find_package(CUDA REQUIRED)
@@ -21,12 +20,16 @@ set(CMAKE_CXX_STANDARD 11)
 
 # Add source files
 set(SOURCES 
-    constants.h 
-    directSum_kernel.cu 
+    main.cpp
+    constants.h
+    barnesHut_kernel.cu 
+    barnesHut_kernel.cuh 
+    barnesHutCuda.cu
+    barnesHutCuda.cuh 
 )
 
 # Add the executable
-cuda_add_executable(DirectSum ${SOURCES})
+cuda_add_executable(BarnesHut ${SOURCES})
 
 # Link GLFW and OpenGL libraries
-target_link_libraries(DirectSum ${OpenCV_LIBS})
+target_link_libraries(BarnesHut ${OpenCV_LIBS})
