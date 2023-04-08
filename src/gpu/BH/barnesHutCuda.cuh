@@ -57,10 +57,15 @@ public:
     BarnesHutCuda(int n);
     ~BarnesHutCuda();
     void reset();
-    void constructQuadTree();
     void computeBoundingBox();
+    void constructQuadTree();
     void computeCenterMass(int nodeIndex);
     void computeForce();
+    void resetCUDA();
+    void computeBoundingBoxCUDA();
+    void constructQuadTreeCUDA();
+    void computeCenterMassCUDA();
+    void computeForceCUDA();
     void update();
     void setup();
     Body *getBodies();

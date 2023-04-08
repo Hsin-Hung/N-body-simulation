@@ -79,14 +79,14 @@ __global__ void ComputeBoundingBox(Node *node, Body *bodies, Vector *topLeft, Ve
         }
     }
 
-    if (tx == 0)
+    if (tx == 0 && b < nBodies)
     {
         while (atomicCAS(mutex, 0, 1) != 0)
             ;
-        topLeft->x = fminf(topLeft->x, topLeftX[0]);
-        topLeft->y = fmaxf(topLeft->y, topLeftY[0]);
-        botRight->x = fmaxf(botRight->x, botRightX[0]);
-        botRight->y = fminf(botRight->y, botRightY[0]);
+        topLeft->x = fminf(topLeft->x, topLeftX[0] - 1);
+        topLeft->y = fmaxf(topLeft->y, topLeftY[0] + 1);
+        botRight->x = fmaxf(botRight->x, botRightX[0] + 1);
+        botRight->y = fminf(botRight->y, botRightY[0] - 1);
         atomicExch(mutex, 0);
     }
 }
@@ -175,8 +175,7 @@ __device__ void ConstructQuadTreeHelper(Node *node, int nodeIndex, Body body, Ve
 
         if (nodeIndex >= leafLimit)
         {
-            // while (atomicCAS(&mutex[nodeIndex], 0, 1) != 0)
-            //     ;
+
             if (curNode.centerMass.x != -1)
             {
 
@@ -191,22 +190,17 @@ __device__ void ConstructQuadTreeHelper(Node *node, int nodeIndex, Body body, Ve
                 curNode.totalMass = body.mass;
                 curNode.centerMass = body.position;
             }
-            // atomicExch(&mutex[nodeIndex], 0);
             break;
         }
 
         // If node x does not contain a body, put the new body here.
         if (curNode.isLeaf)
         {
-            // while (atomicCAS(&mutex[nodeIndex], 0, 1) != 0)
-            //     ;
             if (curNode.centerMass.x != -1)
             {
 
                 int quadrant = getQuadrant(tl, br, curNode.centerMass.x, curNode.centerMass.y);
-                Node &childNode = node[((nodeIndex * 4) + quadrant)];
-
-                updateBound(tl, br, quadrant);
+                Node &childNode = node[(nodeIndex * 4) + quadrant];
                 childNode.centerMass = curNode.centerMass;
                 childNode.totalMass = curNode.totalMass;
 
@@ -219,10 +213,8 @@ __device__ void ConstructQuadTreeHelper(Node *node, int nodeIndex, Body body, Ve
 
                 curNode.centerMass = body.position;
                 curNode.totalMass = body.mass;
-                // atomicExch(&mutex[nodeIndex], 0);
                 break;
             }
-            // atomicExch(&mutex[nodeIndex], 0);
         }
 
         int quadrant = getQuadrant(tl, br, body.position.x, body.position.y);
@@ -243,90 +235,148 @@ __global__ void ConstructQuadTreeKernel(Node *node, Body *bodies, Vector *topLef
     }
 }
 
-// __device__ double getDistance(Vector pos1, Vector pos2)
-// {
+/*
+----------------------------------------------------------------------------------------
+COMPUTE CENTER MASS
+----------------------------------------------------------------------------------------
+*/
 
-//     return sqrt(pow(pos1.x - pos2.x, 2) + pow(pos1.y - pos2.y, 2));
-// }
+__global__ void ComputeCenterMass(Node *node, int nNodes, int start, int end)
+{
+    int nodeIndex = blockIdx.x * blockDim.x + threadIdx.x;
+    nodeIndex += start;
+    if (nodeIndex >= start && nodeIndex < end)
+    {
 
-// __device__ double getWidth(Node &root)
-// {
+        Node &curNode = node[nodeIndex];
 
-//     return root.botRight.x - root.topLeft.x;
-// }
+        if (!curNode.isLeaf)
+        {
 
-// __device__ bool isCollide(Body &b1, Body &b2)
-// {
-//     return b1.radius + b2.radius > getDistance(b1.position, b2.position);
-// }
+            Node &topLNode = node[(nodeIndex * 4) + 2], &topRNode = node[(nodeIndex * 4) + 1], &botLNode = node[(nodeIndex * 4) + 3], &botRNode = node[(nodeIndex * 4) + 4];
+            double totalChildMass = topLNode.totalMass + topRNode.totalMass + botLNode.totalMass + botRNode.totalMass;
+            double totalCenterMassX = 0.0, totalCenterMassY = 0.0;
 
-// __device__ void ComputeForce(Node *node, int nodeIndex, Body *bodies, int bodyIndex, int nNodes, int nBodies)
-// {
-//     if (nodeIndex >= nNodes)
-//     {
-//         return;
-//     }
-//     Node &curNode = node[nodeIndex];
-//     Body &bi = bodies[bodyIndex];
-//     if (curNode.bi != -1)
-//     {
+            totalCenterMassX += topLNode.centerMass.x * topLNode.totalMass;
+            totalCenterMassY += topLNode.centerMass.y * topLNode.totalMass;
 
-//         Body &bj = bodies[curNode.bi];
-//         if (isCollide(bi, bj))
-//             return;
+            totalCenterMassX += topRNode.centerMass.x * topRNode.totalMass;
+            totalCenterMassY += topRNode.centerMass.y * topRNode.totalMass;
 
-//         Vector rij = {bj.position.x - bi.position.x, bj.position.y - bi.position.y};
-//         double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
-//         double f = (GRAVITY * bj.mass) / inv_r3;
-//         Vector force = {rij.x * f, rij.y * f};
-//         bi.acceleration.x += (force.x / bi.mass);
-//         bi.acceleration.y += (force.y / bi.mass);
-//         return;
-//     }
+            totalCenterMassX += botLNode.centerMass.x * botLNode.totalMass;
+            totalCenterMassY += botLNode.centerMass.y * botLNode.totalMass;
 
-//     double sd = getWidth(curNode) / getDistance(bi.position, curNode.centerMass);
-//     if (sd < THETA)
-//     {
-//         Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
-//         if (bi.radius * 2 > getDistance(bi.position, curNode.centerMass))
-//             return;
-//         double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
-//         double f = (GRAVITY * curNode.totalMass) / inv_r3;
-//         Vector force = {rij.x * f, rij.y * f};
-//         bi.acceleration.x += (force.x / bi.mass);
-//         bi.acceleration.y += (force.y / bi.mass);
-//         return;
-//     }
+            totalCenterMassX += botRNode.centerMass.x * botRNode.totalMass;
+            totalCenterMassY += botRNode.centerMass.y * botRNode.totalMass;
 
-//     ComputeForce(node, (nodeIndex * 4) + 1, bodies, bodyIndex, nNodes, nBodies);
-//     ComputeForce(node, (nodeIndex * 4) + 2, bodies, bodyIndex, nNodes, nBodies);
-//     ComputeForce(node, (nodeIndex * 4) + 3, bodies, bodyIndex, nNodes, nBodies);
-//     ComputeForce(node, (nodeIndex * 4) + 4, bodies, bodyIndex, nNodes, nBodies);
-// }
+            curNode.totalMass = totalChildMass;
+            curNode.centerMass = {totalCenterMassX / totalChildMass, totalCenterMassY / totalChildMass};
+        }
+    }
+}
 
-// __global__ void ComputeForceKernel(Node *node, Body *bodies, int nNodes, int nBodies)
-// {
+// /*
+// ----------------------------------------------------------------------------------------
+// COMPUTE FORCE
+// ----------------------------------------------------------------------------------------
+// */
 
-//     int i = blockIdx.x * blockDim.x + threadIdx.x;
+__device__ double getDistance(Vector pos1, Vector pos2)
+{
 
-//     if (i < nBodies)
-//     {
-//         Body &bi = bodies[i];
-//         if (bi.isDynamic)
-//         {
+    return sqrt(pow(pos1.x - pos2.x, 2) + pow(pos1.y - pos2.y, 2));
+}
 
-//             bi.velocity.x += bi.acceleration.x * DT / 2.0;
-//             bi.velocity.y += bi.acceleration.y * DT / 2.0;
+__device__ bool isCollide(Body &b1, Body &b2)
+{
+    return b1.radius + b2.radius > getDistance(b1.position, b2.position);
+}
 
-//             bi.position.x += bi.velocity.x * DT;
-//             bi.position.y += bi.velocity.y * DT;
+__device__ void ComputeForce(Node *node, Body *bodies, int bodyIndex, int nNodes, int nBodies, int leafLimit, double width)
+{
 
-//             bi.acceleration = {0.0, 0.0};
-//             ComputeForce(node, 0, bodies, i, nNodes, nBodies);
-//             bi.velocity.x += bi.acceleration.x * DT / 2.0;
-//             bi.velocity.y += bi.acceleration.y * DT / 2.0;
-//         }
-//     }
-// }
+    Body &bi = bodies[bodyIndex];
+    int q_size = nNodes - leafLimit;
+    int queue[MAX_NODES - N_LEAF];
+    int front = 0, insert = 0;
+    int size;
+    queue[insert++] = 0;
+
+    while (front != insert)
+    {
+        size = insert - front;
+
+        for (int i = 0; i < size; ++i)
+        {
+
+            int nodeIndex = queue[front++];
+            front %= q_size;
+            Node &curNode = node[nodeIndex];
+
+            if (curNode.isLeaf)
+            {
+                if (curNode.centerMass.x != -1)
+                {
+                    if (bi.radius * 2 > getDistance(bi.position, curNode.centerMass))
+                        continue;
+
+                    Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
+                    double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
+                    double f = (GRAVITY * curNode.totalMass) / inv_r3;
+                    Vector force = {rij.x * f, rij.y * f};
+                    bi.acceleration.x += (force.x / bi.mass);
+                    bi.acceleration.y += (force.y / bi.mass);
+                }
+                continue;
+            }
+
+            double sd = width / getDistance(bi.position, curNode.centerMass);
+            if (sd < THETA)
+            {
+                Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
+                if (bi.radius * 2 > getDistance(bi.position, curNode.centerMass))
+                    continue;
+                double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
+                double f = (GRAVITY * curNode.totalMass) / inv_r3;
+                Vector force = {rij.x * f, rij.y * f};
+                bi.acceleration.x += (force.x / bi.mass);
+                bi.acceleration.y += (force.y / bi.mass);
+                continue;
+            }
+            queue[insert++] = (nodeIndex * 4) + 1;
+            queue[insert++] = (nodeIndex * 4) + 2;
+            queue[insert++] = (nodeIndex * 4) + 3;
+            queue[insert++] = (nodeIndex * 4) + 4;
+            insert %= q_size;
+        }
+
+        width /= 2.0;
+    }
+}
+
+__global__ void ComputeForceKernel(Node *node, Body *bodies, int nNodes, int nBodies, int leafLimit, double width)
+{
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i < nBodies)
+    {
+        Body &bi = bodies[i];
+        if (bi.isDynamic)
+        {
+
+            bi.velocity.x += bi.acceleration.x * DT / 2.0;
+            bi.velocity.y += bi.acceleration.y * DT / 2.0;
+
+            bi.position.x += bi.velocity.x * DT;
+            bi.position.y += bi.velocity.y * DT;
+
+            bi.acceleration = {0.0, 0.0};
+            ComputeForce(node, bodies, i, nNodes, nBodies, leafLimit, width);
+            bi.velocity.x += bi.acceleration.x * DT / 2.0;
+            bi.velocity.y += bi.acceleration.y * DT / 2.0;
+                }
+    }
+}
 
 #endif

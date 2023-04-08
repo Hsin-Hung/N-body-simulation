@@ -13,6 +13,6 @@
 #define BLOCK_SIZE 1024
 #define GRID_SIZE 512
 #define MAX_N 102400
-#define MAX_NODES 341376
+#define MAX_NODES 349525
 #define N_LEAF 262144
 #endif

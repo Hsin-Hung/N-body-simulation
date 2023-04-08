@@ -240,6 +240,47 @@ void BarnesHutCuda::computeCenterMass(int nodeIndex)
     curNode.centerMass = {totalCenterMassX / totalChildMass, totalCenterMassY / totalChildMass};
 }
 
+void BarnesHutCuda::resetCUDA()
+{
+    int blockSize = BLOCK_SIZE;
+    dim3 gridSize = ceil((float)nNodes / blockSize);
+    ResetKernel<<<gridSize, blockSize>>>(d_node, d_topLeft, d_botRight, d_mutex, nNodes);
+}
+void BarnesHutCuda::computeBoundingBoxCUDA()
+{
+    int blockSize = BLOCK_SIZE;
+    dim3 gridSize = ceil((float)nBodies / blockSize);
+    ComputeBoundingBox<<<gridSize, blockSize>>>(d_node, d_b, d_topLeft, d_botRight, d_mutex, nBodies);
+}
+void BarnesHutCuda::constructQuadTreeCUDA()
+{
+    int blockSize = BLOCK_SIZE;
+    dim3 gridSize = ceil((float)nBodies / blockSize);
+    ConstructQuadTreeKernel<<<gridSize, blockSize>>>(d_node, d_b, d_topLeft, d_botRight, d_mutex, nNodes, nBodies, leafLimit);
+}
+void BarnesHutCuda::computeCenterMassCUDA()
+{
+    int start = leafLimit, end = nNodes;
+    int totalNodes = end - start, temp = 0;
+    while (end > start)
+    {
+        // std::cout << start << "->" << end << std::endl;
+        int blockSize = BLOCK_SIZE;
+        dim3 gridSize = ceil((float)totalNodes / blockSize);
+        ComputeCenterMass<<<gridSize, blockSize>>>(d_node, nNodes, start, end);
+        totalNodes /= 4;
+        temp = start;
+        end = start;
+        start = temp - totalNodes;
+    }
+}
+void BarnesHutCuda::computeForceCUDA()
+{
+    int blockSize = BLOCK_SIZE;
+    dim3 gridSize = ceil((float)nBodies / blockSize);
+    ComputeForceKernel<<<gridSize, blockSize>>>(d_node, d_b, nNodes, nBodies, leafLimit, h_botRight->x - h_topLeft->x);
+}
+
 void BarnesHutCuda::randomInitBodies()
 {
     srand(time(NULL));
@@ -379,13 +420,24 @@ void BarnesHutCuda::setup()
 }
 void BarnesHutCuda::update()
 {
-    reset();
-    // ResetKernel<<<gridSize, blockSize>>>(d_node, d_topLeft, d_botRight, d_mutex, nNodes);
-    // ComputeBoundingBox<<<gridSize, blockSize>>>(d_node, d_b, d_topLeft, d_botRight, d_mutex, nBodies);
-    // ConstructQuadTreeKernel<<<gridSize, blockSize>>>(d_node, d_b, d_topLeft, d_botRight, d_mutex, nNodes, nBodies, leafLimit);
-    computeBoundingBox();
-    // std::cout << h_topLeft->x << " " << h_topLeft->y << " " << h_botRight->x << " " << h_botRight->y << std::endl;
+    // reset();
+    resetCUDA();
+    computeBoundingBoxCUDA();
+    cudaMemcpy(h_node, d_node, sizeof(Node) * nNodes, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_topLeft, d_topLeft, sizeof(Vector), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_botRight, d_botRight, sizeof(Vector), cudaMemcpyDeviceToHost);
     constructQuadTree();
-    computeCenterMass(0);
-    computeForce();
+    cudaMemcpy(d_node, h_node, sizeof(Node) * nNodes, cudaMemcpyHostToDevice);
+    // constructQuadTreeCUDA();
+    computeCenterMassCUDA();
+    // computeBoundingBox();
+    // std::cout << h_topLeft->x << " " << h_topLeft->y << " " << h_botRight->x << " " << h_botRight->y << std::endl;
+    // cudaMemcpy(h_node, d_node, sizeof(Node) * nNodes, cudaMemcpyDeviceToHost);
+    // std::cout << h_topLeft->x << " " << h_topLeft->y << " " << h_botRight->x << " " << h_botRight->y << std::endl;
+    // constructQuadTree();
+    // computeCenterMass(0);
+    // computeForce();
+    computeForceCUDA();
+    // cudaMemcpy(d_b, h_b, sizeof(Body) * nBodies, cudaMemcpyHostToDevice);
+    // cudaMemcpy(h_b, d_b, sizeof(Body) * nBodies, cudaMemcpyDeviceToHost);
 }
