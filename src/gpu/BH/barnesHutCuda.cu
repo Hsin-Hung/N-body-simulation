@@ -285,9 +285,9 @@ void BarnesHutCuda::computeCenterMassCUDA()
 }
 void BarnesHutCuda::computeForceCUDA()
 {
-    int blockSize = BLOCK_SIZE;
+    int blockSize = 256;
     dim3 gridSize = ceil((float)nBodies / blockSize);
-    ComputeForceKernel<<<nBodies, 256>>>(d_node, d_b, nNodes, nBodies, leafLimit);
+    ComputeForceKernel<<<gridSize, blockSize>>>(d_node, d_b, nNodes, nBodies, leafLimit);
 
     cudaError_t launchError = cudaGetLastError();
     if (launchError != cudaSuccess)
@@ -301,7 +301,7 @@ void BarnesHutCuda::randomInitBodies()
 {
     srand(time(NULL));
     int maxDistance = 200;
-    for (int i = 0; i < nBodies - 1; ++i)
+    for (int i = 0; i < nBodies; ++i)
     {
 
         double angle = 2 * M_PI * (rand() / (double)RAND_MAX);
@@ -322,18 +322,18 @@ void BarnesHutCuda::randomInitBodies()
         h_b[i].id = id_counter++;
         h_b[i].isDynamic = true;
         h_b[i].mass = 1.0 / (double)nBodies;
-        h_b[i].radius = 2;
+        h_b[i].radius = 1;
         h_b[i].position = position;
         h_b[i].velocity = velocity;
         h_b[i].acceleration = {0.0, 0.0};
     }
-    h_b[nBodies - 1].id = id_counter++;
-    h_b[nBodies - 1].isDynamic = false;
-    h_b[nBodies - 1].mass = 200.0 / (double)nBodies;
-    h_b[nBodies - 1].radius = 2;
-    h_b[nBodies - 1].position = {CENTERX, CENTERY};
-    h_b[nBodies - 1].velocity = {0.0, 0.0};
-    h_b[nBodies - 1].acceleration = {0.0, 0.0};
+    // h_b[nBodies - 1].id = id_counter++;
+    // h_b[nBodies - 1].isDynamic = false;
+    // h_b[nBodies - 1].mass = 200.0 / (double)nBodies;
+    // h_b[nBodies - 1].radius = 2;
+    // h_b[nBodies - 1].position = {CENTERX, CENTERY};
+    // h_b[nBodies - 1].velocity = {0.0, 0.0};
+    // h_b[nBodies - 1].acceleration = {0.0, 0.0};
 }
 
 Body *BarnesHutCuda::getBodies()

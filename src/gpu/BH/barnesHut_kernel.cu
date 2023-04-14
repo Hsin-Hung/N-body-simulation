@@ -244,64 +244,102 @@ __global__ void ConstructQuadTreeKernel(Node *node, Body *bodies, Vector *topLef
     }
 }
 
-__device__ void CountBodies(Body *bodies, Vector topLeft, Vector botRight, int *count, int start, int end, int nBodies)
+__device__ void UpdateChildBound(Vector &tl, Vector &br, Node &childNode, int quadrant)
 {
-    if (threadIdx.x < 4)
-        count[threadIdx.x] = 0;
-    __syncthreads();
-    if (threadIdx.x == 0)
-    {
 
-        for (int i = start; i <= end; ++i)
-        {
-            Body &body = bodies[i];
-            int quadrant = getQuadrant(topLeft, botRight, body.position.x, body.position.y);
-            ++count[quadrant - 1];
-        }
+    if (quadrant == 1)
+    {
+        childNode.topLeft = {(tl.x + br.x) / 2, tl.y};
+        childNode.botRight = {br.x, (tl.y + br.y) / 2};
+    }
+    else if (quadrant == 2)
+    {
+        childNode.topLeft = {tl.x, tl.y};
+        childNode.botRight = {(tl.x + br.x) / 2, (tl.y + br.y) / 2};
+    }
+    else if (quadrant == 3)
+    {
+        childNode.topLeft = {tl.x, (tl.y + br.y) / 2};
+        childNode.botRight = {(tl.x + br.x) / 2, br.y};
+    }
+    else
+    {
+        childNode.topLeft = {(tl.x + br.x) / 2, (tl.y + br.y) / 2};
+        childNode.botRight = {br.x, br.y};
+    }
+}
+
+__device__ void ComputeCenterMass(Node &curNode, Body *bodies, int start, int end)
+{
+    int tx = threadIdx.x;
+    double M = curNode.totalMass;
+    double Rx = curNode.totalMass * curNode.centerMass.x;
+    double Ry = curNode.totalMass * curNode.centerMass.y;
+
+    for (int i = start; i <= end; ++i)
+    {
+        Body &body = bodies[i];
+        M += body.mass;
+        Rx += body.mass * body.position.x;
+        Ry += body.mass * body.position.y;
     }
 
+    if (tx == 0)
+    {
+        Rx /= M;
+        Ry /= M;
+        curNode.totalMass = M;
+        curNode.centerMass = {Rx, Ry};
+    }
+}
+__device__ void CountBodies(Body *bodies, Vector topLeft, Vector botRight, int *count, int start, int end, int nBodies)
+{
+    int tx = threadIdx.x;
+    if (tx < 4)
+        count[tx] = 0;
+    __syncthreads();
+
+    for (int i = start + tx; i <= end; i += blockDim.x)
+    {
+        Body &body = bodies[i];
+        int q = getQuadrant(topLeft, botRight, body.position.x, body.position.y);
+        atomicAdd(&count[q - 1], 1);
+    }
+
+    __syncthreads();
+}
+
+__device__ void ComputeOffset(int *count, int start)
+{
+    int tx = threadIdx.x;
+    if (tx < 4)
+    {
+        int offset = start;
+        for (int i = 0; i < tx; ++i)
+        {
+            offset += count[i];
+        }
+        count[tx + 4] = offset;
+    }
     __syncthreads();
 }
 
 __device__ void GroupBodies(Body *bodies, Body *buffer, Vector topLeft, Vector botRight, int *count, int start, int end, int nBodies)
 {
-    int q1 = start, q2 = start + count[0], q3 = start + count[0] + count[1], q4 = start + count[0] + count[1] + count[2];
-    if (threadIdx.x == 0)
+    int *count2 = &count[4];
+    for (int i = start + threadIdx.x; i <= end; i += blockDim.x)
     {
-
-        for (int i = start; i <= end; ++i)
-        {
-            Body &body = bodies[i];
-            int quadrant = getQuadrant(topLeft, botRight, body.position.x, body.position.y);
-            if (quadrant == 1)
-            {
-
-                buffer[q1++] = body;
-            }
-            else if (quadrant == 2)
-            {
-
-                buffer[q2++] = body;
-            }
-            else if (quadrant == 3)
-            {
-
-                buffer[q3++] = body;
-            }
-            else
-            {
-
-                buffer[q4++] = body;
-            }
-        }
+        Body &body = bodies[i];
+        int q = getQuadrant(topLeft, botRight, body.position.x, body.position.y);
+        int dest = atomicAdd(&count2[q - 1], 1);
+        buffer[dest] = body;
     }
-
     __syncthreads();
 }
 
 __global__ void ConstructQuadTreeDPKernel(Node *node, Body *bodies, Body *buffer, int nodeIndex, int nNodes, int nBodies, int leafLimit)
 {
-    __shared__ int count[4];
+    __shared__ int count[8];
     int tx = threadIdx.x;
     nodeIndex += blockIdx.x;
 
@@ -310,31 +348,17 @@ __global__ void ConstructQuadTreeDPKernel(Node *node, Body *bodies, Body *buffer
 
     Node &curNode = node[nodeIndex];
     int start = curNode.start, end = curNode.end;
+    Vector topLeft = curNode.topLeft, botRight = curNode.botRight;
     // if (tx == 0)
     // {
     //     printf("node: %d, start-end: %d -> %d , topleft x: %f y: %f -> botright x: %f y: %f\n", nodeIndex, start, end,
     //            curNode.topLeft.x, curNode.topLeft.y, curNode.botRight.x, curNode.botRight.y);
     // }
 
-    Vector topLeft = curNode.topLeft, botRight = curNode.botRight;
-
     if (start == -1 && end == -1)
         return;
 
-    double M = curNode.totalMass;
-    double Rx = curNode.totalMass * curNode.centerMass.x;
-    double Ry = curNode.totalMass * curNode.centerMass.y;
-    for (int i = start; i <= end; ++i)
-    {
-        Body &body = bodies[i];
-        M += body.mass;
-        Rx += body.mass * body.position.x;
-        Ry += body.mass * body.position.y;
-    }
-    Rx /= M;
-    Ry /= M;
-    curNode.totalMass = M;
-    curNode.centerMass = {Rx, Ry};
+    ComputeCenterMass(curNode, bodies, start, end);
 
     // if (tx == 0)
     //     printf("node: %d, total mass: %f, center mass: %f, %f\n", nodeIndex, M, Rx, Ry);
@@ -353,6 +377,7 @@ __global__ void ConstructQuadTreeDPKernel(Node *node, Body *bodies, Body *buffer
     //     }
     // }
     CountBodies(bodies, topLeft, botRight, count, start, end, nBodies);
+    ComputeOffset(count, start);
     GroupBodies(bodies, buffer, topLeft, botRight, count, start, end, nBodies);
     // if (threadIdx.x == 0)
     // {
@@ -361,38 +386,30 @@ __global__ void ConstructQuadTreeDPKernel(Node *node, Body *bodies, Body *buffer
     //         printf("after node: %d, body id: %d \n", nodeIndex, buffer[i].id);
     //     }
     // }
-    Node &topLNode = node[(nodeIndex * 4) + 1],
-         &topRNode = node[(nodeIndex * 4) + 2], &botLNode = node[(nodeIndex * 4) + 3], &botRNode = node[(nodeIndex * 4) + 4];
+    Node &topLNode = node[(nodeIndex * 4) + 2],
+         &topRNode = node[(nodeIndex * 4) + 1], &botLNode = node[(nodeIndex * 4) + 3], &botRNode = node[(nodeIndex * 4) + 4];
 
     if (tx == 0)
     {
         // printf("node: %d, count: %d %d %d %d\n", nodeIndex, count[0], count[1], count[2], count[3]);
-        topLNode.topLeft = topLeft;
-        topLNode.botRight = botRight;
-        topRNode.topLeft = topLeft;
-        topRNode.botRight = botRight;
-        botLNode.topLeft = topLeft;
-        botLNode.botRight = botRight;
-        botRNode.topLeft = topLeft;
-        botRNode.botRight = botRight;
 
-        updateBound(topLNode.topLeft, topLNode.botRight, 1);
-        updateBound(topRNode.topLeft, topRNode.botRight, 2);
-        updateBound(botLNode.topLeft, botLNode.botRight, 3);
-        updateBound(botRNode.topLeft, botRNode.botRight, 4);
+        UpdateChildBound(topLeft, botRight, topLNode, 2);
+        UpdateChildBound(topLeft, botRight, topRNode, 1);
+        UpdateChildBound(topLeft, botRight, botLNode, 3);
+        UpdateChildBound(topLeft, botRight, botRNode, 4);
 
         curNode.isLeaf = false;
 
         if (count[0] > 0)
         {
-            topLNode.start = start;
-            topLNode.end = start + count[0] - 1;
+            topRNode.start = start;
+            topRNode.end = start + count[0] - 1;
         }
 
         if (count[1] > 0)
         {
-            topRNode.start = start + count[0];
-            topRNode.end = start + count[0] + count[1] - 1;
+            topLNode.start = start + count[0];
+            topLNode.end = start + count[0] + count[1] - 1;
         }
 
         if (count[2] > 0)
@@ -515,8 +532,8 @@ __device__ void ComputeForceRecursive(Node *node, Body *bodies, int nodeIndex, i
 __device__ void ComputeForce(Node *node, Body *bodies, int bodyIndex, int nNodes, int nBodies, int leafLimit, double width)
 {
     Body &bi = bodies[bodyIndex];
-    int q_size = 1024;
-    __shared__ int queue[1024];
+    int q_size = MAX_NODES - N_LEAF;
+    int queue[MAX_NODES - N_LEAF];
     int front = 0, insert = 0;
     int size;
     queue[insert++] = 0;
@@ -581,7 +598,7 @@ __device__ void ComputeForce(Node *node, Body *bodies, int bodyIndex, int nNodes
 __global__ void ComputeForceKernel(Node *node, Body *bodies, int nNodes, int nBodies, int leafLimit)
 {
 
-    int i = blockIdx.x;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
     double width = node[0].botRight.x - node[0].topLeft.x;
 
     if (i < nBodies)
@@ -589,20 +606,18 @@ __global__ void ComputeForceKernel(Node *node, Body *bodies, int nNodes, int nBo
         Body &bi = bodies[i];
         if (bi.isDynamic)
         {
-            if (threadIdx.x == 0)
-            {
-                bi.velocity.x += bi.acceleration.x * DT / 2.0;
-                bi.velocity.y += bi.acceleration.y * DT / 2.0;
-                // printf("velocity: x: %f  y: %f\n", bi.velocity.x, bi.velocity.y);
-                bi.position.x += bi.velocity.x * DT;
-                bi.position.y += bi.velocity.y * DT;
 
-                bi.acceleration = {0.0, 0.0};
+            bi.velocity.x += bi.acceleration.x * DT / 2.0;
+            bi.velocity.y += bi.acceleration.y * DT / 2.0;
+            // printf("velocity: x: %f  y: %f\n", bi.velocity.x, bi.velocity.y);
+            bi.position.x += bi.velocity.x * DT;
+            bi.position.y += bi.velocity.y * DT;
 
-                ComputeForceRecursive(node, bodies, 0, i, nNodes, nBodies, leafLimit, width);
-                bi.velocity.x += bi.acceleration.x * DT / 2.0;
-                bi.velocity.y += bi.acceleration.y * DT / 2.0;
-            }
+            bi.acceleration = {0.0, 0.0};
+
+            ComputeForce(node, bodies, i, nNodes, nBodies, leafLimit, width);
+            bi.velocity.x += bi.acceleration.x * DT / 2.0;
+            bi.velocity.y += bi.acceleration.y * DT / 2.0;
         }
     }
 }

@@ -6,7 +6,7 @@
 #define WINDOW_HEIGHT 1024
 #define GRAVITY 6.67E-11
 #define E 0.5
-#define DT 0.01
+#define DT 0.001
 #define THETA 0.5
 #define CENTERX 512
 #define CENTERY 512
