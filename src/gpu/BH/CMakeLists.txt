@@ -8,6 +8,8 @@ if(NOT OpenCV_FOUND)
 endif()
 include_directories(${OpenCV_INCLUDE_DIRS})
 
+SET(CUDA_SEPARABLE_COMPILATION ON)
+
 # Find CUDA
 find_package(CUDA REQUIRED)
 if(NOT CUDA_FOUND)
@@ -15,8 +17,9 @@ if(NOT CUDA_FOUND)
 endif()
 include_directories(${CUDA_INCLUDE_DIRS})
 
+# set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} ${CUDA_ARCH_FLAGS} -rdc=true")
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
 
 # Add source files
 set(SOURCES 
@@ -32,4 +35,4 @@ set(SOURCES
 cuda_add_executable(BarnesHut ${SOURCES})
 
 # Link GLFW and OpenGL libraries
-target_link_libraries(BarnesHut ${OpenCV_LIBS})
+target_link_libraries(BarnesHut ${OpenCV_LIBS} ${CUDA_TOOLKIT_ROOT_DIR}/lib64/libcudadevrt.a ${CUDA_LIBRARIES})

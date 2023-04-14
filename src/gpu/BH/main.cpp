@@ -9,10 +9,14 @@
 
 cv::VideoWriter video("nbody.avi", cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, cv::Size(WINDOW_WIDTH, WINDOW_HEIGHT));
 
-void display(Body *bodies)
+void display(Body *bodies, int nBodies)
 {
+    for (int i = 0; i < nBodies; ++i)
+    {
+        std::cout << "Body: id:" << bodies[i].id << "  " << bodies[i].position.x << " " << bodies[i].position.y << std::endl;
+    }
 
-    std::cout << "Body " << bodies[3].position.x << " " << bodies[3].position.y << std::endl;
+    std::cout << std::endl;
 }
 
 void storeFrame(Body *bodies, int n, int id)
@@ -48,10 +52,11 @@ int main(int argc, char **argv)
     }
     BarnesHutCuda *bh = new BarnesHutCuda(nBodies);
     bh->setup();
+    // display(bh->getBodies(), nBodies);
     for (int i = 0; i < iters; ++i)
     {
         bh->update();
-        // display(bh->getBodies());
+        // display(bh->getBodies(), nBodies);
         storeFrame(bh->getBodies(), nBodies, i);
     }
     video.release();

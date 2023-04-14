@@ -2,17 +2,17 @@
 #define CONSTANTS_H
 
 #define NUM_BODIES 16
-#define WINDOW_WIDTH 1600
-#define WINDOW_HEIGHT 1600
+#define WINDOW_WIDTH 1024
+#define WINDOW_HEIGHT 1024
 #define GRAVITY 6.67E-11
 #define E 0.5
-#define DT 0.005
-#define THETA 0.3
-#define CENTERX 800
-#define CENTERY 800
+#define DT 0.01
+#define THETA 0.5
+#define CENTERX 512
+#define CENTERY 512
 #define BLOCK_SIZE 1024
 #define GRID_SIZE 512
-#define MAX_N 102400
+#define MAX_N 41616
 #define MAX_NODES 349525
 #define N_LEAF 262144
 #endif

@@ -1,6 +1,7 @@
 #ifndef BARNES_HUT_CUDA_H_
 #define BARNES_HUT_CUDA_H_
 
+static int id_counter = 0;
 typedef struct
 {
     double x;
@@ -9,6 +10,7 @@ typedef struct
 
 typedef struct
 {
+    int id;
     bool isDynamic;
     double mass;
     double radius;
@@ -20,9 +22,13 @@ typedef struct
 
 typedef struct
 {
+    Vector topLeft;
+    Vector botRight;
     Vector centerMass;
     double totalMass;
     bool isLeaf;
+    int start;
+    int end;
 
 } Node;
 
@@ -38,6 +44,7 @@ class BarnesHutCuda
     Vector *h_botRight;
 
     Body *d_b;
+    Body *d_b_buffer;
     Node *d_node;
     int *d_mutex;
     Vector *d_topLeft;
