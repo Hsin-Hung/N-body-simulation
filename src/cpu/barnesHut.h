@@ -5,15 +5,18 @@
 #include "body.h"
 #include "quadtree.h"
 #include "constants.h"
-#define THETA 0.3
-class BarnesHut
+#include "algorithm.h"
+
+#define THETA 0.5
+
+class BarnesHut : public Algorithm
 {
     const double epsilon = 0.5;
     const double dt = 0.005;
-    const int n;
 
-    std::vector<std::shared_ptr<Body>> &bodies;
+    std::unique_ptr<QuadTree> quadTree;
     void constructQuadTree();
+    void computeCenterMass();
     void calculateForceHelper(std::unique_ptr<QuadTree> &root, std::shared_ptr<Body> body);
     void computeBoundingBox();
     void calculateForce(std::shared_ptr<Body> b);
@@ -23,9 +26,8 @@ class BarnesHut
     bool isCollide(Body b1, Body b2);
 
 public:
-    std::unique_ptr<QuadTree> quadTree;
     BarnesHut(std::vector<std::shared_ptr<Body>> &bs);
-    void update();
+    void update() override;
 };
 
 #endif

@@ -2,17 +2,17 @@
 #include "barnesHut.h"
 #include "constants.h"
 
-BarnesHut::BarnesHut(std::vector<std::shared_ptr<Body>> &bs) : bodies(bs), n(bs.size()) {}
+BarnesHut::BarnesHut(std::vector<std::shared_ptr<Body>> &bs) : Algorithm(bs, bs.size()) {}
 
 void BarnesHut::computeBoundingBox()
 {
     Vector topLeft = Vector(INFINITY, -INFINITY), botRight = Vector(-INFINITY, INFINITY);
     for (auto &body : bodies)
     {
-        topLeft.x = fminf(topLeft.x, body->position.x);
-        topLeft.y = fmaxf(topLeft.y, body->position.y);
-        botRight.x = fmaxf(botRight.x, body->position.x);
-        botRight.y = fminf(botRight.y, body->position.y);
+        topLeft.x = fminf(topLeft.x, body->position.x) - 1;
+        topLeft.y = fmaxf(topLeft.y, body->position.y) + 1;
+        botRight.x = fmaxf(botRight.x, body->position.x) + 1;
+        botRight.y = fminf(botRight.y, body->position.y) - 1;
     }
 
     quadTree = std::make_unique<QuadTree>(topLeft, botRight);
@@ -24,7 +24,11 @@ void BarnesHut::constructQuadTree()
     {
         quadTree->insert(body);
     }
-    updateCM(quadTree);
+}
+
+void BarnesHut::computeCenterMass()
+{
+    updateCenterMass(quadTree);
 }
 void BarnesHut::calculateForceHelper(std::unique_ptr<QuadTree> &root, std::shared_ptr<Body> body)
 {
@@ -85,9 +89,7 @@ void BarnesHut::calculateVelocity()
     for (auto &body : bodies)
     {
         body->velocity += body->acceleration * dt / 2.0;
-        mag = std::max(mag, sqrt(body->velocity.x * body->velocity.x + body->velocity.y * body->velocity.y));
     }
-    std::cout << mag << std::endl;
 }
 
 void BarnesHut::calculatePosition()
@@ -121,17 +123,20 @@ void BarnesHut::calculatePosition()
         }
     }
 }
+
+bool BarnesHut::isCollide(Body b1, Body b2)
+{
+
+    return b1.radius + b2.radius > b1.position.getDistance(b2.position);
+}
+
 void BarnesHut::update()
 {
     calculateVelocity();
     calculatePosition();
     computeBoundingBox();
     constructQuadTree();
+    computeCenterMass();
     calculateAcceleration();
     calculateVelocity();
-}
-bool BarnesHut::isCollide(Body b1, Body b2)
-{
-
-    return b1.radius + b2.radius > b1.position.getDistance(b2.position);
 }

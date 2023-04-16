@@ -13,6 +13,7 @@ class QuadTree
     Vector botRight;
     Vector centerMass;
     double totalMass;
+    bool isLeaf;
     std::shared_ptr<Body> b;
 
     std::unique_ptr<QuadTree> topLeftTree;
@@ -29,10 +30,11 @@ public:
     bool inBoundary(Vector point);
     double getWidth();
     Vector getCenter();
-    friend void updateCM(std::unique_ptr<QuadTree> &root);
+    int getQuadrant(Vector pos);
+    friend void updateCenterMass(std::unique_ptr<QuadTree> &root);
     friend void traverse(std::unique_ptr<QuadTree> &root);
     friend double getTotalMass(std::unique_ptr<QuadTree> &root);
-    
+
     friend class BarnesHut;
 };
 

@@ -4,18 +4,19 @@
 #include <memory>
 #include "vector.h"
 #include "body.h"
+#include "algorithm.h"
 
 class NBody
 {
-    const int n;
+    std::unique_ptr<Algorithm> alg;
+    int nBodies;
+    void initRandomBodies();
+    void initSpiralBodies();
 
 public:
-    int timeSteps;
     std::vector<std::shared_ptr<Body>> bodies;
-
-    NBody(const int n);
-    void display();
-    void initBodies();
+    NBody(int n, int i);
+    void update();
 };
 
 #endif

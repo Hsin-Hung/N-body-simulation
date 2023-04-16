@@ -5,4 +5,4 @@
 * `mkdir build; cd build`
 * `cmake ..`
 * `cmake --build .`
-* `./NBody`
+* `./src/cpu/nBodyCPU`

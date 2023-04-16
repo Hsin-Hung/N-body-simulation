@@ -9,11 +9,11 @@ public:
     double y;
 
     Vector() : Vector(0, 0) {}
-    Vector(double x, double y) : x(x), y(y){}
+    Vector(double x, double y) : x(x), y(y) {}
     Vector(const Vector &vt);
     Vector(Vector &&vt) noexcept;
-    double mod();
     double getDistance(Vector to);
+    double mod();
     Vector operator+(const Vector &rhs);
     Vector operator-(const Vector &rhs);
     Vector operator*(double v);

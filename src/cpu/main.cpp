@@ -8,45 +8,39 @@
 #include "barnesHut.h"
 #include "quadtree.h"
 #include "constants.h"
+
 using namespace std;
 
-NBody nb(NUM_BODIES);
-BarnesHut alg(nb.bodies);
-
-void updateDots()
-{
-     alg.update();
-}
-
-void drawDots()
+void drawDots(NBody &nb)
 {
 
      glColor3f(1.0, 1.0, 1.0); // set drawing color to white
 
      for (auto &body : nb.bodies)
      {
-          glPointSize(body->radius/5.0);  // set point size to 5 pixels
-          glBegin(GL_POINTS); // start drawing points
+          glPointSize(body->radius / 5.0); // set point size to 5 pixels
+          glBegin(GL_POINTS);              // start drawing points
           glVertex2f(body->position.x, body->position.y);
           glEnd(); // end drawing points
      }
 }
 
-void display()
+int main(int argc, char **argv)
 {
-     glClear(GL_COLOR_BUFFER_BIT); // clear the screen
-     updateDots();
-     drawDots();
-     // nb.display();
-}
+     int nBodies = NUM_BODIES;
+     int i = 0;
+     if (argc == 3)
+     {
+          nBodies = atoi(argv[1]);
+          i = atoi(argv[2]);
+     }
 
-int main()
-{
+     NBody nb(nBodies, i);
 
      // initialize GLFW
      if (!glfwInit())
           return -1;
-     GLFWwindow *window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "OpenGL Point", NULL, NULL); // create window
+     GLFWwindow *window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "nBody", NULL, NULL); // create window
      if (!window)
      {
           glfwTerminate();
@@ -58,13 +52,13 @@ int main()
      glMatrixMode(GL_PROJECTION);      // set up projection matrix
      glLoadIdentity();
      glOrtho(0.0f, WINDOW_WIDTH, WINDOW_HEIGHT, 0.0f, -1.0f, 1.0f);
-     int n = 10; // Run code once every 60 frames
-     double last_time = 0;
-     int frame_count = 0;
      while (!glfwWindowShouldClose(window)) // main loop
      {
+          glClear(GL_COLOR_BUFFER_BIT); // clear the screen
 
-          display();
+          nb.update();
+          drawDots(nb);
+
           glfwSwapBuffers(window); // swap front and back buffers
           glfwPollEvents();        // poll for events
      }

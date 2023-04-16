@@ -5,6 +5,7 @@
 Vector::Vector(const Vector &vt) : x(vt.x), y(vt.y)
 {
 }
+
 Vector::Vector(Vector &&vt) noexcept : x(vt.x), y(vt.y)
 {
     vt.x = 0;
@@ -16,6 +17,13 @@ double Vector::getDistance(Vector to)
 
     return sqrt(pow(to.x - x, 2) + pow(to.y - y, 2));
 }
+
+double Vector::mod()
+{
+
+    return sqrt(x * x + y * y);
+}
+
 Vector &Vector::operator=(const Vector &vt)
 {
     if (this != &vt)
@@ -26,6 +34,7 @@ Vector &Vector::operator=(const Vector &vt)
 
     return *this;
 }
+
 Vector &Vector::operator=(Vector &&vt) noexcept
 {
     if (this != &vt)
@@ -38,17 +47,13 @@ Vector &Vector::operator=(Vector &&vt) noexcept
     }
     return *this;
 }
-double Vector::mod()
-{
-
-    return sqrt(x * x + y * y);
-}
 
 Vector Vector::operator+(const Vector &rhs)
 {
 
     return Vector(x + rhs.x, y + rhs.y);
 }
+
 Vector Vector::operator-(const Vector &rhs)
 {
 
@@ -78,6 +83,7 @@ Vector &Vector::operator+=(const Vector &rhs)
     y += rhs.y;
     return *this;
 }
+
 bool Vector::operator==(const Vector &rhs)
 {
     return x == rhs.x && y == rhs.y;

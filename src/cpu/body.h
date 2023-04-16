@@ -1,8 +1,7 @@
 #ifndef BODY_H
 #define BODY_H
-
-#include "vector.h"
 #include <iostream>
+#include "vector.h"
 
 class Body
 {

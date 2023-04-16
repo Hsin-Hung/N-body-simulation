@@ -2,24 +2,16 @@
 #include <math.h>
 #include <iostream>
 
-QuadTree::QuadTree()
+QuadTree::QuadTree() : QuadTree(Vector(-1, -1), Vector(-1, -1))
 {
-    topLeft = Vector(0, 0);
-    botRight = Vector(0, 0);
-    centerMass = Vector(0, 0);
-    totalMass = 0.0;
-    b = nullptr;
-    topLeftTree = nullptr;
-    topRightTree = nullptr;
-    botLeftTree = nullptr;
-    botRightTree = nullptr;
 }
 QuadTree::QuadTree(Vector topL, Vector botR)
 {
     topLeft = topL;
     botRight = botR;
-    centerMass = Vector(0, 0);
+    centerMass = Vector(-1, -1);
     totalMass = 0.0;
+    isLeaf = true;
     b = nullptr;
     topLeftTree = nullptr;
     topRightTree = nullptr;
@@ -29,15 +21,52 @@ QuadTree::QuadTree(Vector topL, Vector botR)
 QuadTree::~QuadTree()
 {
 }
+
+int QuadTree::getQuadrant(Vector pos)
+{
+
+    if ((topLeft.x + botRight.x) / 2 >= pos.x)
+    {
+        // Indicates topLeftTree
+        if ((topLeft.y + botRight.y) / 2 <= pos.y)
+        {
+            return 2;
+        }
+
+        // Indicates botLeftTree
+        else
+        {
+            return 3;
+        }
+    }
+    else
+    {
+        // Indicates topRightTree
+        if ((topLeft.y + botRight.y) / 2 <= pos.y)
+        {
+            return 1;
+        }
+
+        // Indicates botRightTree
+        else
+        {
+            return 4;
+        }
+    }
+}
 void QuadTree::insert(std::shared_ptr<Body> body)
 {
     if (body == nullptr)
         return;
 
     if (!inBoundary(body->position))
+    {
+        std::cout << "ERROR: body out of bound" << std::endl;
         return;
+    }
+
     // If node x does not contain a body, put the new body here.
-    if (b == nullptr && topLeftTree == nullptr && topRightTree == nullptr && botLeftTree == nullptr && botRightTree == nullptr)
+    if (b == nullptr && isLeaf)
     {
         b = body;
         return;
@@ -54,103 +83,83 @@ void QuadTree::insert(std::shared_ptr<Body> body)
             this->insert(b);
         }
     }
-    if ((topLeft.x + botRight.x) / 2 >= body->position.x)
+
+    isLeaf = false;
+
+    int q = getQuadrant(body->position);
+
+    if (q == 1)
     {
-        // Indicates topLeftTree
-        if ((topLeft.y + botRight.y) / 2 <= body->position.y)
-        {
-            if (topLeftTree == nullptr)
-                topLeftTree = std::make_unique<QuadTree>(Vector(topLeft.x, topLeft.y), Vector((topLeft.x + botRight.x) / 2,
-                                                                                              (topLeft.y + botRight.y) / 2));
+        if (topRightTree == nullptr)
+            topRightTree = std::make_unique<QuadTree>(Vector((topLeft.x + botRight.x) / 2,
+                                                             topLeft.y),
+                                                      Vector(botRight.x,
+                                                             (topLeft.y + botRight.y) / 2));
 
-            topLeftTree->insert(body);
-        }
+        topRightTree->insert(body);
+    }
+    else if (q == 2)
+    {
+        if (topLeftTree == nullptr)
+            topLeftTree = std::make_unique<QuadTree>(Vector(topLeft.x, topLeft.y), Vector((topLeft.x + botRight.x) / 2,
+                                                                                          (topLeft.y + botRight.y) / 2));
 
-        // Indicates botLeftTree
-        else
-        {
-            if (botLeftTree == nullptr)
-                botLeftTree = std::make_unique<QuadTree>(Vector(topLeft.x,
-                                                                (topLeft.y + botRight.y) / 2),
-                                                         Vector((topLeft.x + botRight.x) / 2,
-                                                                botRight.y));
+        topLeftTree->insert(body);
+    }
+    else if (q == 3)
+    {
+        if (botLeftTree == nullptr)
+            botLeftTree = std::make_unique<QuadTree>(Vector(topLeft.x,
+                                                            (topLeft.y + botRight.y) / 2),
+                                                     Vector((topLeft.x + botRight.x) / 2,
+                                                            botRight.y));
 
-            botLeftTree->insert(body);
-        }
+        botLeftTree->insert(body);
     }
     else
     {
-        // Indicates topRightTree
-        if ((topLeft.y + botRight.y) / 2 <= body->position.y)
-        {
-            if (topRightTree == nullptr)
-                topRightTree = std::make_unique<QuadTree>(Vector((topLeft.x + botRight.x) / 2,
-                                                                 topLeft.y),
-                                                          Vector(botRight.x,
-                                                                 (topLeft.y + botRight.y) / 2));
+        if (botRightTree == nullptr)
+            botRightTree = std::make_unique<QuadTree>(Vector((topLeft.x + botRight.x) / 2,
+                                                             (topLeft.y + botRight.y) / 2),
+                                                      Vector(botRight.x, botRight.y));
 
-            topRightTree->insert(body);
-        }
-
-        // Indicates botRightTree
-        else
-        {
-            if (botRightTree == nullptr)
-                botRightTree = std::make_unique<QuadTree>(Vector((topLeft.x + botRight.x) / 2,
-                                                                 (topLeft.y + botRight.y) / 2),
-                                                          Vector(botRight.x, botRight.y));
-
-            botRightTree->insert(body);
-        }
+        botRightTree->insert(body);
     }
 }
 std::shared_ptr<Body> QuadTree::search(Vector p)
 {
 
-    // Current quad cannot contain it
     if (!inBoundary(p))
         return nullptr;
 
-    // We are at a quad of unit length
-    // We cannot subdivide this quad further
     if (b != nullptr)
         return b;
 
-    if ((topLeft.x + botRight.x) / 2 >= p.x)
-    {
-        // Indicates topLeftTree
-        if ((topLeft.y + botRight.y) / 2 <= p.y)
-        {
-            if (topLeftTree == nullptr)
-                return nullptr;
-            return topLeftTree->search(p);
-        }
+    int q = getQuadrant(p);
 
-        // Indicates botLeftTree
-        else
-        {
-            if (botLeftTree == nullptr)
-                return nullptr;
-            return botLeftTree->search(p);
-        }
+    if (q == 1)
+    {
+        if (topRightTree == nullptr)
+            return nullptr;
+        return topRightTree->search(p);
+    }
+    else if (q == 2)
+    {
+        if (topLeftTree == nullptr)
+            return nullptr;
+        return topLeftTree->search(p);
+    }
+    else if (q == 3)
+    {
+        if (botLeftTree == nullptr)
+            return nullptr;
+        return botLeftTree->search(p);
     }
     else
     {
-        // Indicates topRightTree
-        if ((topLeft.y + botRight.y) / 2 <= p.y)
-        {
-            if (topRightTree == nullptr)
-                return nullptr;
-            return topRightTree->search(p);
-        }
-
-        // Indicates botRightTree
-        else
-        {
-            if (botRightTree == nullptr)
-                return nullptr;
-            return botRightTree->search(p);
-        }
+        if (botRightTree == nullptr)
+            return nullptr;
+        return botRightTree->search(p);
     }
 }
 double getTotalMass(std::unique_ptr<QuadTree> &root)
@@ -159,7 +168,7 @@ double getTotalMass(std::unique_ptr<QuadTree> &root)
         return 0.0;
     return root->totalMass;
 }
-void updateCM(std::unique_ptr<QuadTree> &root)
+void updateCenterMass(std::unique_ptr<QuadTree> &root)
 {
     if (!root)
         return;
@@ -170,10 +179,10 @@ void updateCM(std::unique_ptr<QuadTree> &root)
         return;
     }
 
-    updateCM(root->topLeftTree);
-    updateCM(root->topRightTree);
-    updateCM(root->botLeftTree);
-    updateCM(root->botRightTree);
+    updateCenterMass(root->topLeftTree);
+    updateCenterMass(root->topRightTree);
+    updateCenterMass(root->botLeftTree);
+    updateCenterMass(root->botRightTree);
 
     double totalChildMass = getTotalMass(root->topLeftTree) + getTotalMass(root->topRightTree) + getTotalMass(root->botLeftTree) + getTotalMass(root->botRightTree);
 
@@ -220,7 +229,7 @@ void traverse(std::unique_ptr<QuadTree> &root)
         return;
 
     if (root->b)
-        std::cout << root->topLeft << " " << root->botRight << " " << root->totalMass << " " << root->centerMass << " " <<  *root->b << std::endl;
+        std::cout << root->topLeft << " " << root->botRight << " " << root->totalMass << " " << root->centerMass << " " << *root->b << std::endl;
     else
         std::cout << root->topLeft << " " << root->botRight << " " << root->totalMass << " " << root->centerMass << " " << std::endl;
 

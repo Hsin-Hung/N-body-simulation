@@ -4,15 +4,13 @@
 #include <memory>
 #include "body.h"
 #include "constants.h"
+#include "algorithm.h"
 
-class DirectSum
+class DirectSum : public Algorithm
 {
     const double epsilon = 0.5;
     const double dt = 0.005;
-    int n;
-    std::vector<std::shared_ptr<Body>> &bodies;
 
-    void calculateCollision(Body &b1, Body &b2);
     void calculateAcceleration();
     void calculateVelocity();
     void calculatePosition();
@@ -20,7 +18,7 @@ class DirectSum
 
 public:
     DirectSum(std::vector<std::shared_ptr<Body>> &bs);
-    void update();
+    void update() override;
 };
 
 #endif
