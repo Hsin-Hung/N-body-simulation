@@ -20,10 +20,7 @@ include_directories(${CUDA_INCLUDE_DIRS})
 set(CMAKE_CXX_STANDARD 11)
 
 # Add source files
-set(SOURCES 
-    constants.h 
-    directSum_kernel.cu 
-)
+file(GLOB SOURCES *.h *.cu)
 
 # Add the executable
 cuda_add_executable(DirectSum ${SOURCES})

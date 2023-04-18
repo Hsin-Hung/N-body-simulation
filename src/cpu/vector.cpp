@@ -24,6 +24,21 @@ double Vector::mod()
     return sqrt(x * x + y * y);
 }
 
+Vector Vector::normalize()
+{
+    double magnitude = mod();
+    if (magnitude != 0.0)
+    {
+        x /= magnitude;
+        y /= magnitude;
+    }
+}
+
+double Vector::dot(Vector v)
+{
+    return x * v.x + y * v.y;
+}
+
 Vector &Vector::operator=(const Vector &vt)
 {
     if (this != &vt)
@@ -81,6 +96,13 @@ Vector &Vector::operator+=(const Vector &rhs)
 {
     x += rhs.x;
     y += rhs.y;
+    return *this;
+}
+
+Vector &Vector::operator-=(const Vector &rhs)
+{
+    x -= rhs.x;
+    y -= rhs.y;
     return *this;
 }
 

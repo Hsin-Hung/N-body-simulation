@@ -12,7 +12,7 @@
 class BarnesHut : public Algorithm
 {
     const double epsilon = 0.5;
-    const double dt = 0.005;
+    const double dt = 25000.0;
 
     std::unique_ptr<QuadTree> quadTree;
     void constructQuadTree();
@@ -24,6 +24,7 @@ class BarnesHut : public Algorithm
     void calculateVelocity();
     void calculatePosition();
     bool isCollide(Body b1, Body b2);
+    bool isCollide(Body b, Vector cm);
 
 public:
     BarnesHut(std::vector<std::shared_ptr<Body>> &bs);

@@ -1,7 +1,6 @@
 #ifndef BARNES_HUT_CUDA_H_
 #define BARNES_HUT_CUDA_H_
 
-static int id_counter = 0;
 typedef struct
 {
     double x;
@@ -10,7 +9,6 @@ typedef struct
 
 typedef struct
 {
-    int id;
     bool isDynamic;
     double mass;
     double radius;
@@ -52,7 +50,8 @@ class BarnesHutCuda
 
     bool inBoundary(Vector topLeft, Vector botRight, Vector p);
     int getQuadrant(Vector topLeft, Vector botRight, double x, double y);
-    void randomInitBodies();
+    void initRandomBodies();
+    void initSpiralBodies();
     double getTotalMass(int nodeIndex);
     void insertQuadTree(int nodeIndex, int b, Vector tl, Vector br);
     void computeForceHelper(int nodeIndex, int b, double width);
@@ -73,6 +72,7 @@ public:
     void constructQuadTreeCUDA();
     void computeCenterMassCUDA();
     void computeForceCUDA();
+    void readDeviceBodies();
     void update();
     void setup();
     Body *getBodies();

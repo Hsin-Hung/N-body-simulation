@@ -22,14 +22,7 @@ include_directories(${CUDA_INCLUDE_DIRS})
 set(CMAKE_CXX_STANDARD 20)
 
 # Add source files
-set(SOURCES 
-    main.cpp
-    constants.h
-    barnesHut_kernel.cu 
-    barnesHut_kernel.cuh 
-    barnesHutCuda.cu
-    barnesHutCuda.cuh 
-)
+file(GLOB SOURCES *.cpp *.h *.cu *.cuh)
 
 # Add the executable
 cuda_add_executable(BarnesHut ${SOURCES})

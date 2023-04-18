@@ -8,8 +8,9 @@
 
 class DirectSum : public Algorithm
 {
-    const double epsilon = 0.5;
-    const double dt = 0.005;
+    double epsilon = 0.5;
+    double dt = 25000.0;
+    bool adaptTime = false;
 
     void calculateAcceleration();
     void calculateVelocity();

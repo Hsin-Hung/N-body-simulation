@@ -2,9 +2,7 @@
 #include <cmath>
 #include "barnesHut_kernel.cuh"
 #include "constants.h"
-
-dim3 gridSize = GRID_SIZE;
-dim3 blockSize = BLOCK_SIZE;
+#include "err.h"
 
 BarnesHutCuda::BarnesHutCuda(int n) : nBodies(n)
 {
@@ -15,12 +13,12 @@ BarnesHutCuda::BarnesHutCuda(int n) : nBodies(n)
     h_topLeft = new Vector;
     h_botRight = new Vector;
 
-    cudaMalloc((void **)&d_b, sizeof(Body) * n);
-    cudaMalloc((void **)&d_node, sizeof(Node) * nNodes);
-    cudaMalloc((void **)&d_mutex, sizeof(int) * nNodes);
-    cudaMalloc((void **)&d_topLeft, sizeof(Vector));
-    cudaMalloc((void **)&d_botRight, sizeof(Vector));
-    cudaMalloc((void **)&d_b_buffer, sizeof(Body) * n);
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_b, sizeof(Body) * n));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_node, sizeof(Node) * nNodes));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_mutex, sizeof(int) * nNodes));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_topLeft, sizeof(Vector)));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_botRight, sizeof(Vector)));
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_b_buffer, sizeof(Body) * n));
 }
 
 BarnesHutCuda::~BarnesHutCuda()
@@ -30,12 +28,12 @@ BarnesHutCuda::~BarnesHutCuda()
     delete[] h_node;
     delete h_topLeft;
     delete h_botRight;
-    cudaFree(d_b);
-    cudaFree(d_node);
-    cudaFree(d_mutex);
-    cudaFree(d_topLeft);
-    cudaFree(d_botRight);
-    cudaFree(d_b_buffer);
+    CHECK_CUDA_ERROR(cudaFree(d_b));
+    CHECK_CUDA_ERROR(cudaFree(d_node));
+    CHECK_CUDA_ERROR(cudaFree(d_mutex));
+    CHECK_CUDA_ERROR(cudaFree(d_topLeft));
+    CHECK_CUDA_ERROR(cudaFree(d_botRight));
+    CHECK_CUDA_ERROR(cudaFree(d_b_buffer));
 }
 
 void BarnesHutCuda::computeBoundingBox()
@@ -260,12 +258,6 @@ void BarnesHutCuda::constructQuadTreeCUDA()
     int blockSize = BLOCK_SIZE;
     dim3 gridSize = ceil((float)nBodies / blockSize);
     ConstructQuadTreeDPKernel<<<1, blockSize>>>(d_node, d_b, d_b_buffer, 0, nNodes, nBodies, leafLimit);
-    cudaError_t launchError = cudaGetLastError();
-    // if (launchError != cudaSuccess)
-    // {
-    //     printf("Kernel launch failed with error: %s\n", cudaGetErrorString(launchError));
-    //     // ... handle the error appropriately ...
-    // }
 }
 void BarnesHutCuda::computeCenterMassCUDA()
 {
@@ -273,7 +265,6 @@ void BarnesHutCuda::computeCenterMassCUDA()
     int totalNodes = end - start, temp = 0;
     while (end > start)
     {
-        // std::cout << start << "->" << end << std::endl;
         int blockSize = BLOCK_SIZE;
         dim3 gridSize = ceil((float)totalNodes / blockSize);
         ComputeCenterMass<<<gridSize, blockSize>>>(d_node, nNodes, start, end);
@@ -288,16 +279,9 @@ void BarnesHutCuda::computeForceCUDA()
     int blockSize = 256;
     dim3 gridSize = ceil((float)nBodies / blockSize);
     ComputeForceKernel<<<gridSize, blockSize>>>(d_node, d_b, nNodes, nBodies, leafLimit);
-
-    cudaError_t launchError = cudaGetLastError();
-    if (launchError != cudaSuccess)
-    {
-        printf("Kernel launch failed with error: %s\n", cudaGetErrorString(launchError));
-        // ... handle the error appropriately ...
-    }
 }
 
-void BarnesHutCuda::randomInitBodies()
+void BarnesHutCuda::initRandomBodies()
 {
     srand(time(NULL));
     int maxDistance = 200;
@@ -312,14 +296,36 @@ void BarnesHutCuda::randomInitBodies()
         double x = CENTERX + distance * std::cos(angle);
         double y = CENTERY + distance * std::sin(angle);
 
-        // int randPx = rand() % (1000 - 1 + 1) + 500;
-        // int randPy = rand() % (1000 - 1 + 1) + 500;
+        Vector position = {x, y};
+
+        h_b[i].isDynamic = true;
+        h_b[i].mass = 1.0 / (double)nBodies;
+        h_b[i].radius = 1;
+        h_b[i].position = position;
+        h_b[i].velocity = {0.0, 0.0};
+        h_b[i].acceleration = {0.0, 0.0};
+    }
+}
+
+void BarnesHutCuda::initSpiralBodies()
+{
+
+    srand(time(NULL));
+    int maxDistance = 200;
+    for (int i = 0; i < nBodies; ++i)
+    {
+
+        double angle = 2 * M_PI * (rand() / (double)RAND_MAX);
+        // Generate random distance from center within the given max distance
+        double distance = maxDistance * (rand() / (double)RAND_MAX);
+
+        // Calculate coordinates of the point
+        double x = CENTERX + distance * std::cos(angle);
+        double y = CENTERY + distance * std::sin(angle);
         Vector position = {x, y};
         Vector r = {x - CENTERX, y - CENTERY};
         Vector velocity = {r.y, -r.x};
-        // int randVx = rand() % (500 - 1 + 1) + 1;
-        // int randVy = rand() % (500 - 1 + 1) + 1;
-        h_b[i].id = id_counter++;
+
         h_b[i].isDynamic = true;
         h_b[i].mass = 1.0 / (double)nBodies;
         h_b[i].radius = 1;
@@ -327,13 +333,6 @@ void BarnesHutCuda::randomInitBodies()
         h_b[i].velocity = velocity;
         h_b[i].acceleration = {0.0, 0.0};
     }
-    // h_b[nBodies - 1].id = id_counter++;
-    // h_b[nBodies - 1].isDynamic = false;
-    // h_b[nBodies - 1].mass = 200.0 / (double)nBodies;
-    // h_b[nBodies - 1].radius = 2;
-    // h_b[nBodies - 1].position = {CENTERX, CENTERY};
-    // h_b[nBodies - 1].velocity = {0.0, 0.0};
-    // h_b[nBodies - 1].acceleration = {0.0, 0.0};
 }
 
 Body *BarnesHutCuda::getBodies()
@@ -448,41 +447,21 @@ void BarnesHutCuda::reset()
     *h_botRight = {-INFINITY, INFINITY};
 }
 
+void BarnesHutCuda::readDeviceBodies()
+{
+    CHECK_CUDA_ERROR(cudaMemcpy(h_b, d_b, sizeof(Body) * nBodies, cudaMemcpyDeviceToHost));
+}
 void BarnesHutCuda::setup()
 {
-    randomInitBodies();
-    cudaMemcpy(d_b, h_b, sizeof(Body) * nBodies, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_node, h_node, sizeof(Node) * nNodes, cudaMemcpyHostToDevice);
+    initSpiralBodies();
+    CHECK_CUDA_ERROR(cudaMemcpy(d_b, h_b, sizeof(Body) * nBodies, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_node, h_node, sizeof(Node) * nNodes, cudaMemcpyHostToDevice));
 }
 void BarnesHutCuda::update()
 {
-
-    // for (int i = 0; i < nBodies; ++i)
-    // {
-    //     std::cout << "body: " << i << " ->pos: " << h_b[i].position.x << " " << h_b[i].position.y << std::endl;
-    // }
-    // reset();
     resetCUDA();
     computeBoundingBoxCUDA();
-    // cudaMemcpy(h_node, d_node, sizeof(Node) * nNodes, cudaMemcpyDeviceToHost);
-    // cudaMemcpy(h_topLeft, d_topLeft, sizeof(Vector), cudaMemcpyDeviceToHost);
-    // cudaMemcpy(h_botRight, d_botRight, sizeof(Vector), cudaMemcpyDeviceToHost);
-    // constructQuadTree();
-    // cudaMemcpy(d_node, h_node, sizeof(Node) * nNodes, cudaMemcpyHostToDevice);
     constructQuadTreeCUDA();
-    // computeCenterMassCUDA();
-    // computeBoundingBox();
-    // std::cout << h_topLeft->x << " " << h_topLeft->y << " " << h_botRight->x << " " << h_botRight->y << std::endl;
-    // cudaMemcpy(h_node, d_node, sizeof(Node) * nNodes, cudaMemcpyDeviceToHost);
-    // for (int i = 0; i < 6; ++i)
-    // {
-    //     std::cout << "host quad tree: " << i << " " << h_node[i].totalMass << std::endl;
-    // }
-    // std::cout << h_topLeft->x << " " << h_topLeft->y << " " << h_botRight->x << " " << h_botRight->y << std::endl;
-    // constructQuadTree();
-    // computeCenterMass(0);
-    // computeForce();
     computeForceCUDA();
-    // cudaMemcpy(d_b, h_b, sizeof(Body) * nBodies, cudaMemcpyHostToDevice);
-    cudaMemcpy(h_b, d_b, sizeof(Body) * nBodies, cudaMemcpyDeviceToHost);
+    CHECK_LAST_CUDA_ERROR();
 }

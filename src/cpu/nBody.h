@@ -12,6 +12,7 @@ class NBody
     int nBodies;
     void initRandomBodies();
     void initSpiralBodies();
+    void initSolarSystem();
 
 public:
     std::vector<std::shared_ptr<Body>> bodies;

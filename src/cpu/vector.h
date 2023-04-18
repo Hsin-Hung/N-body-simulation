@@ -14,12 +14,15 @@ public:
     Vector(Vector &&vt) noexcept;
     double getDistance(Vector to);
     double mod();
+    double dot(Vector v);
+    Vector normalize();
     Vector operator+(const Vector &rhs);
     Vector operator-(const Vector &rhs);
     Vector operator*(double v);
     Vector operator*(Vector v);
     Vector operator/(double v);
     Vector &operator+=(const Vector &rhs);
+    Vector &operator-=(const Vector &rhs);
     bool operator==(const Vector &rhs);
     bool operator!=(const Vector &rhs);
     Vector &operator=(const Vector &other);

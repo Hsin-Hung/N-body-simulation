@@ -13,7 +13,7 @@ void display(Body *bodies, int nBodies)
 {
     for (int i = 0; i < nBodies; ++i)
     {
-        std::cout << "Body: id:" << bodies[i].id << "  " << bodies[i].position.x << " " << bodies[i].position.y << std::endl;
+        std::cout << bodies[i].position.x << " " << bodies[i].position.y << std::endl;
     }
 
     std::cout << std::endl;
@@ -56,6 +56,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < iters; ++i)
     {
         bh->update();
+        bh->readDeviceBodies();
         // display(bh->getBodies(), nBodies);
         storeFrame(bh->getBodies(), nBodies, i);
     }

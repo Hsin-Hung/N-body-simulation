@@ -25,10 +25,10 @@ QuadTree::~QuadTree()
 int QuadTree::getQuadrant(Vector pos)
 {
 
-    if ((topLeft.x + botRight.x) / 2 >= pos.x)
+    if ((topLeft.x + botRight.x) / 2.0 >= pos.x)
     {
         // Indicates topLeftTree
-        if ((topLeft.y + botRight.y) / 2 <= pos.y)
+        if ((topLeft.y + botRight.y) / 2.0 <= pos.y)
         {
             return 2;
         }
@@ -42,7 +42,7 @@ int QuadTree::getQuadrant(Vector pos)
     else
     {
         // Indicates topRightTree
-        if ((topLeft.y + botRight.y) / 2 <= pos.y)
+        if ((topLeft.y + botRight.y) / 2.0 <= pos.y)
         {
             return 1;
         }

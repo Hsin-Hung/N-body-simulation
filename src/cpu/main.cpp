@@ -11,6 +11,14 @@
 
 using namespace std;
 
+Vector scaleToWindow(Vector pos)
+{
+
+     double scaleX = WINDOW_HEIGHT / NBODY_HEIGHT;
+     double scaleY = WINDOW_WIDTH / NBODY_WIDTH;
+     return Vector((pos.x - 0) * scaleX + 800, (pos.y - 0) * scaleY + 800);
+}
+
 void drawDots(NBody &nb)
 {
 
@@ -18,9 +26,11 @@ void drawDots(NBody &nb)
 
      for (auto &body : nb.bodies)
      {
-          glPointSize(body->radius / 5.0); // set point size to 5 pixels
-          glBegin(GL_POINTS);              // start drawing points
-          glVertex2f(body->position.x, body->position.y);
+          glPointSize(5);     // set point size to 5 pixels
+          glBegin(GL_POINTS); // start drawing points
+          Vector pos = scaleToWindow(body->position);
+          // std::cout << "org: " << body->position << std::endl;
+          glVertex2f(pos.x, pos.y);
           glEnd(); // end drawing points
      }
 }

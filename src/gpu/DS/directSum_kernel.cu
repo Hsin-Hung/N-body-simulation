@@ -8,6 +8,7 @@
 #include <vector>
 #include <opencv2/opencv.hpp>
 #include "constants.h"
+#include "err.h"
 
 #define BLOCK_SIZE 256
 
@@ -136,12 +137,12 @@ __global__ void DirectSumKernel(Body *bodies, int n)
     }
 }
 
-__global__ void DirectSumKernel_Tiled(Body *bodies, int n)
+__global__ void DirectSumTiledKernel(Body *bodies, int n)
 {
     __shared__ Body Bds[BLOCK_SIZE];
 
-    int bx = blockIdx.x, by = blockIdx.y;
-    int tx = threadIdx.x, ty = threadIdx.y;
+    int bx = blockIdx.x;
+    int tx = threadIdx.x;
     int i = bx * blockDim.x + tx;
 
     if (i < n)
@@ -202,45 +203,43 @@ void storeFrame(Body *bodies, int n, int id)
         points.push_back(cv::Point2f(bodies[i].position.x, bodies[i].position.y));
     }
 
-    int radius = 2;
     cv::Scalar color = cv::Scalar(255, 255, 255); // White color
     for (int i = 0; i < n; i++)
     {
         cv::Point center(points[i].x, points[i].y);
-        cv::circle(image, center, bodies[i].radius / 5.0, color, -1);
+        cv::circle(image, center, bodies[i].radius, color, -1);
     }
     video.write(image);
     // cv::imwrite("frame" + std::to_string(id) + ".jpg", image);
 }
 
-Body *allocateBodies(int n)
+Body *initRandomBodies(int n)
 {
 
-    // int bytes = n * sizeof(Body);
-    // Body *bodies = (Body *)malloc(bytes);
-
-    Body* bodies = new Body[n];
+    Body *bodies = new Body[n];
     srand(time(NULL));
+    int maxDistance = 200;
     for (int i = 0; i < n - 1; ++i)
     {
-        int randPx = rand() % (1000 - 1 + 1) + 500;
-        int randPy = rand() % (1000 - 1 + 1) + 500;
-        // int randVx = rand() % (500 - 1 + 1) + 1;
-        // int randVy = rand() % (500 - 1 + 1) + 1;
-        Vector position = Vector((double)randPx, (double)randPy);
-        Vector r = Vector(randPx - CENTERX, randPy - CENTERY);
-        Vector velocity = Vector(r.y, -r.x);
+        double angle = 2 * M_PI * (rand() / (double)RAND_MAX);
+        // Generate random distance from center within the given max distance
+        double distance = maxDistance * (rand() / (double)RAND_MAX);
+
+        // Calculate coordinates of the point
+        double x = CENTERX + distance * std::cos(angle);
+        double y = CENTERY + distance * std::sin(angle);
+        Vector position = {x, y};
         bodies[i].isDynamic = true;
         bodies[i].mass = 1.0 / (double)n;
-        bodies[i].radius = 10;
+        bodies[i].radius = 1;
         bodies[i].position = position;
-        bodies[i].velocity = velocity;
+        bodies[i].velocity = {0.0, 0.0};
         bodies[i].acceleration = {0.0, 0.0};
     }
 
     bodies[n - 1].isDynamic = false;
     bodies[n - 1].mass = 200.0 / (double)n;
-    bodies[n - 1].radius = 10;
+    bodies[n - 1].radius = 1;
     bodies[n - 1].position = {CENTERX, CENTERY};
     bodies[n - 1].velocity = {0.0, 0.0};
     bodies[n - 1].acceleration = {0.0, 0.0};
@@ -248,38 +247,75 @@ Body *allocateBodies(int n)
     return bodies;
 }
 
+Body *initSpiralBodies(int n)
+{
+
+    Body *bodies = new Body[n];
+    srand(time(NULL));
+    int maxDistance = 200;
+    for (int i = 0; i < n; ++i)
+    {
+
+        double angle = 2 * M_PI * (rand() / (double)RAND_MAX);
+        // Generate random distance from center within the given max distance
+        double distance = maxDistance * (rand() / (double)RAND_MAX);
+
+        // Calculate coordinates of the point
+        double x = CENTERX + distance * std::cos(angle);
+        double y = CENTERY + distance * std::sin(angle);
+
+        Vector position = {x, y};
+        Vector r = {x - CENTERX, y - CENTERY};
+        Vector velocity = {r.y, -r.x};
+
+        bodies[i].isDynamic = true;
+        bodies[i].mass = 1.0 / (double)n;
+        bodies[i].radius = 1;
+        bodies[i].position = position;
+        bodies[i].velocity = velocity;
+        bodies[i].acceleration = {0.0, 0.0};
+    }
+
+    return bodies;
+}
+
 int main(int argc, char **argv)
 {
     int nBodies = NUM_BODIES;
-    int iters = 60;
+    int iters = 300;
     if (argc == 3)
     {
         nBodies = atoi(argv[1]);
         iters = atoi(argv[2]);
     }
 
-    Body *bodies = allocateBodies(nBodies);
+    Body *h_bodies = initRandomBodies(nBodies);
 
     int bytes = nBodies * sizeof(Body);
 
     Body *d_bodies;
-    cudaMalloc((void **)&d_bodies, bytes);
+    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_bodies, bytes));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_bodies, h_bodies, bytes, cudaMemcpyHostToDevice));
 
     int blockSize = BLOCK_SIZE;
     int gridSize = ceil((double)nBodies / blockSize);
     int it = 0;
     while (it < iters) // main loop
     {
-        cudaMemcpy(d_bodies, bodies, bytes, cudaMemcpyHostToDevice);
-        DirectSumKernel_Tiled<<<gridSize, blockSize>>>(d_bodies, nBodies);
-        cudaMemcpy(bodies, d_bodies, bytes, cudaMemcpyDeviceToHost);
-        storeFrame(bodies, nBodies, it);
+
+        DirectSumTiledKernel<<<gridSize, blockSize>>>(d_bodies, nBodies);
+        CHECK_LAST_CUDA_ERROR();
+        CHECK_CUDA_ERROR(cudaMemcpy(h_bodies, d_bodies, bytes, cudaMemcpyDeviceToHost));
+        storeFrame(h_bodies, nBodies, ++it);
         // display(bodies);
-        ++it;
     }
     video.release();
-    cudaFree(d_bodies);
-    free(bodies);
+
+    // free memories
+    CHECK_CUDA_ERROR(cudaFree(d_bodies));
+    free(h_bodies);
+
+    CHECK_LAST_CUDA_ERROR();
     return 0;
 }
 
