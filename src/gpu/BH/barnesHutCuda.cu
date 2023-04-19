@@ -80,7 +80,7 @@ void BarnesHutCuda::initRandomBodies()
 {
     srand(time(NULL));
     double maxDistance = 2.2790e11;
-    double minDistance = 1.4960e11;
+    double minDistance = 5.0e10;
     Vector centerPos = {CENTERX, CENTERY};
     for (int i = 0; i < nBodies - 1; ++i)
     {
@@ -113,7 +113,7 @@ void BarnesHutCuda::initSpiralBodies()
 
     srand(time(NULL));
     double maxDistance = 2.2790e11;
-    double minDistance = 1.4960e11;
+    double minDistance = 5.0e10;
     Vector centerPos = {CENTERX, CENTERY};
     for (int i = 0; i < nBodies - 1; ++i)
     {
@@ -133,7 +133,7 @@ void BarnesHutCuda::initSpiralBodies()
 
         // Calculate velocity vector components
         double esc = sqrt((GRAVITY * 1.9891e30) / (distance));
-        Vector velocity = {a.x * esc, -a.y * esc};
+        Vector velocity = {-a.y * esc, a.x * esc};
 
         h_b[i].isDynamic = true;
         h_b[i].mass = 5.974e24;

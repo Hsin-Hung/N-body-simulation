@@ -70,7 +70,7 @@ void NBody::initSpiralBodies()
 
         // Calculate velocity vector components
         double esc = sqrt((GRAVITY * 1.9891e30) / (distance));
-        Vector velocity(a.x * esc, -a.y * esc);
+        Vector velocity(-a.y * esc, a.x * esc);
 
         bodies.push_back(std::make_shared<Body>(5.974e24, 1.3927e6, position, velocity, Vector(0, 0)));
     }

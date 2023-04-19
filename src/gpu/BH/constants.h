@@ -17,6 +17,6 @@
 #define MAX_N 4194304
 #define MAX_NODES 349525
 #define N_LEAF 262144
-#define COLLISION_TH 5.0e10
+#define COLLISION_TH 1.0e10
 
 #endif

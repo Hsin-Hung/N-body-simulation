@@ -272,7 +272,7 @@ Body *initSpiralBodies(int n)
 
         // Calculate velocity vector components
         double esc = sqrt((GRAVITY * 1.9891e30) / (distance));
-        Vector velocity = {a.x * esc, -a.y * esc};
+        Vector velocity = {-a.y * esc, a.x * esc};
 
         bodies[i].isDynamic = true;
         bodies[i].mass = 5.974e24;
