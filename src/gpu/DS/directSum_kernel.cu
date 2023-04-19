@@ -39,7 +39,7 @@ __device__ double getDistance(Vector pos1, Vector pos2)
 
 __device__ bool isCollide(Body &b1, Body &b2)
 {
-    return b1.radius + b2.radius > getDistance(b1.position, b2.position);
+    return b1.radius + b2.radius + COLLISION_TH > getDistance(b1.position, b2.position);
 }
 
 __device__ void calculateAcceleration(Body &bi, int i, Body *bodies, int n)
@@ -105,14 +105,9 @@ __global__ void DirectSumKernel(Body *bodies, int n)
     if (i < n)
     {
         Body &bi = bodies[i];
+        double fx = 0.0, fy = 0.0;
         if (bi.isDynamic)
         {
-
-            bi.velocity.x += bi.acceleration.x * DT / 2.0;
-            bi.velocity.y += bi.acceleration.y * DT / 2.0;
-
-            bi.position.x += bi.velocity.x * DT;
-            bi.position.y += bi.velocity.y * DT;
 
             bi.acceleration = {0.0, 0.0};
             for (int b = 0; b < n; ++b)
@@ -120,19 +115,21 @@ __global__ void DirectSumKernel(Body *bodies, int n)
                 if (b != i)
                 {
                     Body &bj = bodies[b];
-                    if (!isCollide(bi, bj))
+                    if (!isCollide(bi, bj) && bi.isDynamic)
                     {
                         Vector rij = {bj.position.x - bi.position.x, bj.position.y - bi.position.y};
-                        double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
-                        double f = (GRAVITY * bj.mass) / inv_r3;
+                        double r = sqrt((rij.x * rij.x) + (rij.y * rij.y) + (E * E));
+                        double f = (GRAVITY * bi.mass * bj.mass) / (r * r * r + (E * E));
                         Vector force = {rij.x * f, rij.y * f};
-                        bi.acceleration.x += (force.x / bi.mass);
-                        bi.acceleration.y += (force.y / bi.mass);
+                        fx += (force.x / bi.mass);
+                        fy += (force.y / bi.mass);
                     }
                 }
             }
-            bi.velocity.x += bi.acceleration.x * DT / 2.0;
-            bi.velocity.y += bi.acceleration.y * DT / 2.0;
+            bi.velocity.x += bi.acceleration.x * DT;
+            bi.velocity.y += bi.acceleration.y * DT;
+            bi.position.x += bi.velocity.x * DT;
+            bi.position.y += bi.velocity.y * DT;
         }
     }
 }
@@ -149,10 +146,6 @@ __global__ void DirectSumTiledKernel(Body *bodies, int n)
     {
         Body &bi = bodies[i];
         double fx = 0.0, fy = 0.0;
-        bi.velocity.x += bi.acceleration.x * DT / 2.0;
-        bi.velocity.y += bi.acceleration.y * DT / 2.0;
-        bi.position.x += bi.velocity.x * DT;
-        bi.position.y += bi.velocity.y * DT;
         bi.acceleration = {0.0, 0.0};
         for (int tile = 0; tile < gridDim.x; ++tile)
         {
@@ -166,11 +159,11 @@ __global__ void DirectSumTiledKernel(Body *bodies, int n)
                 if (j < n)
                 {
                     Body bj = Bds[b];
-                    if (!isCollide(bi, bj))
+                    if (!isCollide(bi, bj) && bi.isDynamic)
                     {
                         Vector rij = {bj.position.x - bi.position.x, bj.position.y - bi.position.y};
-                        double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
-                        double f = (GRAVITY * bj.mass) / inv_r3;
+                        double r = sqrt((rij.x * rij.x) + (rij.y * rij.y) + (E * E));
+                        double f = (GRAVITY * bi.mass * bj.mass) / (r * r * r + (E * E));
                         Vector force = {rij.x * f, rij.y * f};
                         fx += (force.x / bi.mass);
                         fy += (force.y / bi.mass);
@@ -181,8 +174,10 @@ __global__ void DirectSumTiledKernel(Body *bodies, int n)
         }
         bi.acceleration.x += fx;
         bi.acceleration.y += fy;
-        bi.velocity.x += bi.acceleration.x * DT / 2.0;
-        bi.velocity.y += bi.acceleration.y * DT / 2.0;
+        bi.velocity.x += bi.acceleration.x * DT;
+        bi.velocity.y += bi.acceleration.y * DT;
+        bi.position.x += bi.velocity.x * DT;
+        bi.position.y += bi.velocity.y * DT;
     }
 }
 
@@ -192,22 +187,23 @@ void display(Body *bodies)
     std::cout << bodies[0].position.x << " " << bodies[0].position.y << std::endl;
 }
 
+Vector scaleToWindow(Vector pos)
+{
+
+    double scaleX = WINDOW_HEIGHT / NBODY_HEIGHT;
+    double scaleY = WINDOW_WIDTH / NBODY_WIDTH;
+    return {(pos.x - 0) * scaleX + 800, (pos.y - 0) * scaleY + 800};
+}
+
 void storeFrame(Body *bodies, int n, int id)
 {
     cv::Mat image = cv::Mat::zeros(WINDOW_HEIGHT, WINDOW_WIDTH, CV_8UC3);
-    // Generate random points
-    std::vector<cv::Point2f> points;
-    cv::RNG rng;
-    for (int i = 0; i < n; i++)
-    {
-        points.push_back(cv::Point2f(bodies[i].position.x, bodies[i].position.y));
-    }
-
     cv::Scalar color = cv::Scalar(255, 255, 255); // White color
     for (int i = 0; i < n; i++)
     {
-        cv::Point center(points[i].x, points[i].y);
-        cv::circle(image, center, bodies[i].radius, color, -1);
+        Vector pos = scaleToWindow(bodies[i].position);
+        cv::Point center(pos.x, pos.y);
+        cv::circle(image, center, 1, color, -1);
     }
     video.write(image);
     // cv::imwrite("frame" + std::to_string(id) + ".jpg", image);
@@ -218,29 +214,31 @@ Body *initRandomBodies(int n)
 
     Body *bodies = new Body[n];
     srand(time(NULL));
-    int maxDistance = 200;
+    double maxDistance = 2.2790e11;
+    double minDistance = 1.4960e11;
+    Vector centerPos = {CENTERX, CENTERY};
     for (int i = 0; i < n - 1; ++i)
     {
         double angle = 2 * M_PI * (rand() / (double)RAND_MAX);
         // Generate random distance from center within the given max distance
-        double distance = maxDistance * (rand() / (double)RAND_MAX);
+        double radius = (maxDistance - minDistance) * (rand() / (double)RAND_MAX) + minDistance;
 
         // Calculate coordinates of the point
-        double x = CENTERX + distance * std::cos(angle);
-        double y = CENTERY + distance * std::sin(angle);
+        double x = CENTERX + radius * std::cos(angle);
+        double y = CENTERY + radius * std::sin(angle);
         Vector position = {x, y};
         bodies[i].isDynamic = true;
-        bodies[i].mass = 1.0 / (double)n;
-        bodies[i].radius = 1;
+        bodies[i].mass = 5.974e24;
+        bodies[i].radius = 1.3927e6;
         bodies[i].position = position;
         bodies[i].velocity = {0.0, 0.0};
         bodies[i].acceleration = {0.0, 0.0};
     }
 
     bodies[n - 1].isDynamic = false;
-    bodies[n - 1].mass = 200.0 / (double)n;
-    bodies[n - 1].radius = 1;
-    bodies[n - 1].position = {CENTERX, CENTERY};
+    bodies[n - 1].mass = 1.9890e30;
+    bodies[n - 1].radius = 1.3927e6;
+    bodies[n - 1].position = centerPos;
     bodies[n - 1].velocity = {0.0, 0.0};
     bodies[n - 1].acceleration = {0.0, 0.0};
 
@@ -252,30 +250,66 @@ Body *initSpiralBodies(int n)
 
     Body *bodies = new Body[n];
     srand(time(NULL));
-    int maxDistance = 200;
-    for (int i = 0; i < n; ++i)
+    double maxDistance = 2.2790e11;
+    double minDistance = 1.4960e11;
+    Vector centerPos = {CENTERX, CENTERY};
+    for (int i = 0; i < n - 1; ++i)
     {
 
         double angle = 2 * M_PI * (rand() / (double)RAND_MAX);
         // Generate random distance from center within the given max distance
-        double distance = maxDistance * (rand() / (double)RAND_MAX);
+        double radius = (maxDistance - minDistance) * (rand() / (double)RAND_MAX) + minDistance;
 
         // Calculate coordinates of the point
-        double x = CENTERX + distance * std::cos(angle);
-        double y = CENTERY + distance * std::sin(angle);
+        double x = CENTERX + radius * std::cos(angle);
+        double y = CENTERY + radius * std::sin(angle);
 
         Vector position = {x, y};
-        Vector r = {x - CENTERX, y - CENTERY};
-        Vector velocity = {r.y, -r.x};
+
+        double distance = sqrt(pow(x - centerPos.x, 2) + pow(y - centerPos.y, 2));
+        Vector r = {position.x - centerPos.x, position.y - centerPos.y};
+        Vector a = {r.x / distance, r.y / distance};
+
+        // Calculate velocity vector components
+        double esc = sqrt((GRAVITY * 1.9891e30) / (distance));
+        Vector velocity = {a.x * esc, -a.y * esc};
 
         bodies[i].isDynamic = true;
-        bodies[i].mass = 1.0 / (double)n;
-        bodies[i].radius = 1;
+        bodies[i].mass = 5.974e24;
+        bodies[i].radius = 1.3927e6;
         bodies[i].position = position;
         bodies[i].velocity = velocity;
         bodies[i].acceleration = {0.0, 0.0};
     }
 
+    bodies[n - 1].isDynamic = false;
+    bodies[n - 1].mass = 1.9890e30;
+    bodies[n - 1].radius = 1.3927e6;
+    bodies[n - 1].position = centerPos;
+    bodies[n - 1].velocity = {0.0, 0.0};
+    bodies[n - 1].acceleration = {0.0, 0.0};
+    return bodies;
+}
+
+void setBody(Body *bodies, int i, bool isDynamic, double mass, double radius, Vector position, Vector velocity, Vector acceleration)
+{
+    bodies[i].isDynamic = isDynamic;
+    bodies[i].mass = mass;
+    bodies[i].radius = radius;
+    bodies[i].position = position;
+    bodies[i].velocity = velocity;
+    bodies[i].acceleration = acceleration;
+}
+
+Body *initSolarSystem()
+{
+
+    Body *bodies = new Body[5];
+    setBody(bodies, 0, true, 5.9740e24, 1.3927e6, {1.4960e11, 0}, {0, 2.9800e4}, {0, 0});
+    setBody(bodies, 1, true, 6.4190e23, 1.3927e6, {2.2790e11, 0}, {0, 2.4100e4}, {0, 0});
+    setBody(bodies, 2, true, 3.3020e23, 1.3927e6, {5.7900e10, 0}, {0, 4.7900e4}, {0, 0});
+    setBody(bodies, 3, true, 4.8690e24, 1.3927e6, {1.0820e11, 0}, {0, 3.5000e4}, {0, 0});
+    setBody(bodies, 4, false, 1.9890e30, 1.3927e6, {CENTERX, CENTERY}, {0, 0}, {0, 0});
     return bodies;
 }
 

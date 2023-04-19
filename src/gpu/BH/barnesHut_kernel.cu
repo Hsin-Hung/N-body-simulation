@@ -88,14 +88,10 @@ __global__ void ComputeBoundingBoxKernel(Node *node, Body *bodies, Vector *topLe
     {
         while (atomicCAS(mutex, 0, 1) != 0)
             ;
-        // topLeft->x = fminf(topLeft->x, topLeftX[0] - 1);
-        // topLeft->y = fmaxf(topLeft->y, topLeftY[0] + 1);
-        // botRight->x = fmaxf(botRight->x, botRightX[0] + 1);
-        // botRight->y = fminf(botRight->y, botRightY[0] - 1);
-        node[0].topLeft.x = fminf(node[0].topLeft.x, topLeftX[0] - 1);
-        node[0].topLeft.y = fmaxf(node[0].topLeft.y, topLeftY[0] + 1);
-        node[0].botRight.x = fmaxf(node[0].botRight.x, botRightX[0] + 1);
-        node[0].botRight.y = fminf(node[0].botRight.y, botRightY[0] - 1);
+        node[0].topLeft.x = fminf(node[0].topLeft.x, topLeftX[0] - 1.0e10);
+        node[0].topLeft.y = fmaxf(node[0].topLeft.y, topLeftY[0] + 1.0e10);
+        node[0].botRight.x = fmaxf(node[0].botRight.x, botRightX[0] + 1.0e10);
+        node[0].botRight.y = fminf(node[0].botRight.y, botRightY[0] - 1.0e10);
         atomicExch(mutex, 0);
     }
 }
@@ -349,49 +345,31 @@ __global__ void ConstructQuadTreeDPKernel(Node *node, Body *bodies, Body *buffer
     Node &curNode = node[nodeIndex];
     int start = curNode.start, end = curNode.end;
     Vector topLeft = curNode.topLeft, botRight = curNode.botRight;
-    // if (tx == 0)
-    // {
-    //     printf("node: %d, start-end: %d -> %d , topleft x: %f y: %f -> botright x: %f y: %f\n", nodeIndex, start, end,
-    //            curNode.topLeft.x, curNode.topLeft.y, curNode.botRight.x, curNode.botRight.y);
-    // }
 
     if (start == -1 && end == -1)
         return;
 
     ComputeCenterMass(curNode, bodies, start, end);
 
-    // if (tx == 0)
-    //     printf("node: %d, total mass: %f, center mass: %f, %f\n", nodeIndex, M, Rx, Ry);
-
     if (nodeIndex >= leafLimit || start == end)
     {
-        buffer[start] = bodies[start];
+        for (int i = start; i <= end; ++i)
+        {
+            buffer[i] = bodies[i];
+        }
+
         return;
     }
 
-    // if (threadIdx.x == 0)
-    // {
-    //     for (int i = start; i <= end; ++i)
-    //     {
-    //         printf("before node: %d, body id: %d \n", nodeIndex, bodies[i].id);
-    //     }
-    // }
     CountBodies(bodies, topLeft, botRight, count, start, end, nBodies);
     ComputeOffset(count, start);
     GroupBodies(bodies, buffer, topLeft, botRight, count, start, end, nBodies);
-    // if (threadIdx.x == 0)
-    // {
-    //     for (int i = start; i <= end; ++i)
-    //     {
-    //         printf("after node: %d, body id: %d \n", nodeIndex, buffer[i].id);
-    //     }
-    // }
+
     Node &topLNode = node[(nodeIndex * 4) + 2],
          &topRNode = node[(nodeIndex * 4) + 1], &botLNode = node[(nodeIndex * 4) + 3], &botRNode = node[(nodeIndex * 4) + 4];
 
     if (tx == 0)
     {
-        // printf("node: %d, count: %d %d %d %d\n", nodeIndex, count[0], count[1], count[2], count[3]);
 
         UpdateChildBound(topLeft, botRight, topLNode, 2);
         UpdateChildBound(topLeft, botRight, topRNode, 1);
@@ -481,54 +459,14 @@ __device__ double getDistance(Vector pos1, Vector pos2)
 
 __device__ bool isCollide(Body &b1, Body &b2)
 {
-    return b1.radius + b2.radius > getDistance(b1.position, b2.position);
+    return b1.radius + b2.radius + COLLISION_TH > getDistance(b1.position, b2.position);
 }
-__device__ void ComputeForceRecursive(Node *node, Body *bodies, int nodeIndex, int bodyIndex, int nNodes, int nBodies, int leafLimit, double width)
+
+__device__ bool isCollide(Body &b1, Vector cm)
 {
-
-    if (nodeIndex >= nNodes)
-    {
-        return;
-    }
-    Node &curNode = node[nodeIndex];
-    Body &bi = bodies[bodyIndex];
-    if (curNode.isLeaf)
-    {
-
-        if (curNode.centerMass.x != -1)
-        {
-            if (bi.radius * 2 > getDistance(bi.position, curNode.centerMass))
-                return;
-
-            Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
-            double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
-            double f = (GRAVITY * curNode.totalMass) / inv_r3;
-            Vector force = {rij.x * f, rij.y * f};
-            bi.acceleration.x += (force.x / bi.mass);
-            bi.acceleration.y += (force.y / bi.mass);
-        }
-        return;
-    }
-
-    double sd = width / getDistance(bi.position, curNode.centerMass);
-    if (sd < THETA)
-    {
-        Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
-        if (bi.radius * 2 > getDistance(bi.position, curNode.centerMass))
-            return;
-        double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
-        double f = (GRAVITY * curNode.totalMass) / inv_r3;
-        Vector force = {rij.x * f, rij.y * f};
-        bi.acceleration.x += (force.x / bi.mass);
-        bi.acceleration.y += (force.y / bi.mass);
-        return;
-    }
-
-    ComputeForceRecursive(node, bodies, (nodeIndex * 4) + 1, bodyIndex, nNodes, nBodies, leafLimit, width / 2);
-    ComputeForceRecursive(node, bodies, (nodeIndex * 4) + 2, bodyIndex, nNodes, nBodies, leafLimit, width / 2);
-    ComputeForceRecursive(node, bodies, (nodeIndex * 4) + 3, bodyIndex, nNodes, nBodies, leafLimit, width / 2);
-    ComputeForceRecursive(node, bodies, (nodeIndex * 4) + 4, bodyIndex, nNodes, nBodies, leafLimit, width / 2);
+    return b1.radius * 2 + COLLISION_TH > getDistance(b1.position, cm);
 }
+
 __device__ void ComputeForce(Node *node, Body *bodies, int bodyIndex, int nNodes, int nBodies, int leafLimit, double width)
 {
     Body &bi = bodies[bodyIndex];
@@ -551,14 +489,11 @@ __device__ void ComputeForce(Node *node, Body *bodies, int bodyIndex, int nNodes
 
             if (curNode.isLeaf)
             {
-                if (curNode.centerMass.x != -1)
+                if (curNode.centerMass.x != -1 && !isCollide(bi, curNode.centerMass))
                 {
-                    if (bi.radius * 2 > getDistance(bi.position, curNode.centerMass))
-                        continue;
-
                     Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
-                    double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
-                    double f = (GRAVITY * curNode.totalMass) / inv_r3;
+                    double r = sqrt((rij.x * rij.x) + (rij.y * rij.y) + (E * E));
+                    double f = (GRAVITY * bi.mass * curNode.totalMass) / (r * r * r + (E * E));
                     Vector force = {rij.x * f, rij.y * f};
                     bi.acceleration.x += (force.x / bi.mass);
                     bi.acceleration.y += (force.y / bi.mass);
@@ -570,10 +505,10 @@ __device__ void ComputeForce(Node *node, Body *bodies, int bodyIndex, int nNodes
             if (sd < THETA)
             {
                 Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
-                if (bi.radius * 2 > getDistance(bi.position, curNode.centerMass))
+                if (isCollide(bi, curNode.centerMass))
                     continue;
-                double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
-                double f = (GRAVITY * curNode.totalMass) / inv_r3;
+                double r = sqrt((rij.x * rij.x) + (rij.y * rij.y) + (E * E));
+                double f = (GRAVITY * bi.mass * curNode.totalMass) / (r * r * r + (E * E));
                 Vector force = {rij.x * f, rij.y * f};
                 bi.acceleration.x += (force.x / bi.mass);
                 bi.acceleration.y += (force.y / bi.mass);
@@ -606,18 +541,12 @@ __global__ void ComputeForceKernel(Node *node, Body *bodies, int nNodes, int nBo
         Body &bi = bodies[i];
         if (bi.isDynamic)
         {
-
-            bi.velocity.x += bi.acceleration.x * DT / 2.0;
-            bi.velocity.y += bi.acceleration.y * DT / 2.0;
-            // printf("velocity: x: %f  y: %f\n", bi.velocity.x, bi.velocity.y);
+            bi.acceleration = {0.0, 0.0};
+            ComputeForce(node, bodies, i, nNodes, nBodies, leafLimit, width);
+            bi.velocity.x += bi.acceleration.x * DT;
+            bi.velocity.y += bi.acceleration.y * DT;
             bi.position.x += bi.velocity.x * DT;
             bi.position.y += bi.velocity.y * DT;
-
-            bi.acceleration = {0.0, 0.0};
-
-            ComputeForce(node, bodies, i, nNodes, nBodies, leafLimit, width);
-            bi.velocity.x += bi.acceleration.x * DT / 2.0;
-            bi.velocity.y += bi.acceleration.y * DT / 2.0;
         }
     }
 }

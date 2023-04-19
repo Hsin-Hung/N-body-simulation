@@ -48,25 +48,14 @@ class BarnesHutCuda
     Vector *d_topLeft;
     Vector *d_botRight;
 
-    bool inBoundary(Vector topLeft, Vector botRight, Vector p);
-    int getQuadrant(Vector topLeft, Vector botRight, double x, double y);
     void initRandomBodies();
     void initSpiralBodies();
-    double getTotalMass(int nodeIndex);
-    void insertQuadTree(int nodeIndex, int b, Vector tl, Vector br);
-    void computeForceHelper(int nodeIndex, int b, double width);
-    void updateBound(Vector &tl, Vector &br, int quadrant);
-    double getDistance(Vector pos1, Vector pos2);
-    bool isCollide(Body &b1, Body &b2);
+    void initSolarSystem();
+    void setBody(int i, bool isDynamic, double mass, double radius, Vector position, Vector velocity, Vector acceleration);
 
 public:
     BarnesHutCuda(int n);
     ~BarnesHutCuda();
-    void reset();
-    void computeBoundingBox();
-    void constructQuadTree();
-    void computeCenterMass(int nodeIndex);
-    void computeForce();
     void resetCUDA();
     void computeBoundingBoxCUDA();
     void constructQuadTreeCUDA();

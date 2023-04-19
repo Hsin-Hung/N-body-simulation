@@ -65,7 +65,6 @@ void NBody::initSpiralBodies()
         Vector position(x, y);
 
         double distance = position.getDistance(centerPos);
-
         Vector r = position - centerPos;
         Vector a = r / distance;
 
