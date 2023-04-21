@@ -18,5 +18,12 @@
 #define MAX_NODES 349525
 #define N_LEAF 262144
 #define COLLISION_TH 1.0e10
+#define MIN_DIST 2.0e10
+#define MAX_DIST 5.0e11
+#define SUN_MASS 1.9890e30
+#define SUN_DIA 1.3927e6
+#define EARTH_MASS 5.974e24
+#define EARTH_DIA 12756
+#define HBL 1.6e29
 
 #endif

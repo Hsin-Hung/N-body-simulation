@@ -30,6 +30,7 @@ void BarnesHut::computeCenterMass()
 {
     updateCenterMass(quadTree);
 }
+
 void BarnesHut::calculateForceHelper(std::unique_ptr<QuadTree> &root, std::shared_ptr<Body> body)
 {
     if (!root)
@@ -51,7 +52,7 @@ void BarnesHut::calculateForceHelper(std::unique_ptr<QuadTree> &root, std::share
     }
 
     double sd = root->getWidth() / body->position.getDistance(root->centerMass);
-    if (sd < THETA)
+    if (sd < theta)
     {
         Body &bi = *body;
         Vector rij = root->centerMass - bi.position;
@@ -75,6 +76,7 @@ void BarnesHut::calculateForce(std::shared_ptr<Body> b)
 {
     calculateForceHelper(quadTree, b);
 }
+
 void BarnesHut::calculateAcceleration()
 {
     for (auto &body : bodies)
@@ -86,6 +88,7 @@ void BarnesHut::calculateAcceleration()
         }
     }
 }
+
 void BarnesHut::calculateVelocity()
 {
     for (auto &body : bodies)

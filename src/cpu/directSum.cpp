@@ -57,8 +57,6 @@ bool DirectSum::isCollide(Body b1, Body b2)
 
 void DirectSum::update()
 {
-    // calculateVelocity();
-    // calculatePosition();
     calculateAcceleration();
     calculateVelocity();
     calculatePosition();

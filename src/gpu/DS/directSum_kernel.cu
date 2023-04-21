@@ -42,62 +42,6 @@ __device__ bool isCollide(Body &b1, Body &b2)
     return b1.radius + b2.radius + COLLISION_TH > getDistance(b1.position, b2.position);
 }
 
-__device__ void calculateAcceleration(Body &bi, int i, Body *bodies, int n)
-{
-
-    bi.acceleration = {0.0, 0.0};
-    for (int b = 0; b < n; ++b)
-    {
-        if (b != i)
-        {
-            Body &bj = bodies[b];
-            if (!isCollide(bi, bj))
-            {
-                Vector rij = {bj.position.x - bi.position.x, bj.position.y - bi.position.y};
-                double inv_r3 = pow(rij.x * rij.x + rij.y * rij.y + E * E, -1.5);
-                double f = (GRAVITY * bj.mass) / inv_r3;
-                Vector force = {rij.x * f, rij.y * f};
-                bi.acceleration.x += (force.x / bi.mass);
-                bi.acceleration.y += (force.y / bi.mass);
-            }
-        }
-    }
-}
-
-__device__ void calculateVelocity(Body &bi)
-{
-
-    bi.velocity.x += bi.acceleration.x * DT / 2.0;
-    bi.velocity.y += bi.acceleration.y * DT / 2.0;
-}
-
-__device__ void calculatePosition(Body &bi)
-{
-    int boundaryWidth = WINDOW_WIDTH, boundaryHeight = WINDOW_HEIGHT;
-    bi.position.x += bi.velocity.x * DT;
-    bi.position.y += bi.velocity.y * DT;
-    if (bi.position.x < 0)
-    {
-        bi.position.x = 0;
-        bi.velocity.x *= -1.0f;
-    }
-    if (bi.position.x > boundaryWidth)
-    {
-        bi.position.x = boundaryWidth;
-        bi.velocity.x *= -1.0f;
-    }
-    if (bi.position.y < 0)
-    {
-        bi.position.y = 0;
-        bi.velocity.y *= -1.0f;
-    }
-    if (bi.position.y > boundaryHeight)
-    {
-        bi.position.y = boundaryHeight;
-        bi.velocity.y *= -1.0f;
-    }
-}
-
 __global__ void DirectSumKernel(Body *bodies, int n)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -115,7 +59,7 @@ __global__ void DirectSumKernel(Body *bodies, int n)
                 if (b != i)
                 {
                     Body &bj = bodies[b];
-                    if (!isCollide(bi, bj) && bi.isDynamic)
+                    if (!isCollide(bi, bj))
                     {
                         Vector rij = {bj.position.x - bi.position.x, bj.position.y - bi.position.y};
                         double r = sqrt((rij.x * rij.x) + (rij.y * rij.y) + (E * E));
@@ -126,6 +70,8 @@ __global__ void DirectSumKernel(Body *bodies, int n)
                     }
                 }
             }
+            bi.acceleration.x += fx;
+            bi.acceleration.y += fy;
             bi.velocity.x += bi.acceleration.x * DT;
             bi.velocity.y += bi.acceleration.y * DT;
             bi.position.x += bi.velocity.x * DT;
@@ -192,7 +138,7 @@ Vector scaleToWindow(Vector pos)
 
     double scaleX = WINDOW_HEIGHT / NBODY_HEIGHT;
     double scaleY = WINDOW_WIDTH / NBODY_WIDTH;
-    return {(pos.x - 0) * scaleX + 800, (pos.y - 0) * scaleY + 800};
+    return {(pos.x - 0) * scaleX + WINDOW_WIDTH / 2, (pos.y - 0) * scaleY + WINDOW_HEIGHT / 2};
 }
 
 void storeFrame(Body *bodies, int n, int id)
@@ -214,8 +160,8 @@ Body *initRandomBodies(int n)
 
     Body *bodies = new Body[n];
     srand(time(NULL));
-    double maxDistance = 2.2790e11;
-    double minDistance = 1.4960e11;
+    double maxDistance = MAX_DIST;
+    double minDistance = MIN_DIST;
     Vector centerPos = {CENTERX, CENTERY};
     for (int i = 0; i < n - 1; ++i)
     {
@@ -224,20 +170,20 @@ Body *initRandomBodies(int n)
         double radius = (maxDistance - minDistance) * (rand() / (double)RAND_MAX) + minDistance;
 
         // Calculate coordinates of the point
-        double x = CENTERX + radius * std::cos(angle);
-        double y = CENTERY + radius * std::sin(angle);
+        double x = centerPos.x + radius * std::cos(angle);
+        double y = centerPos.y + radius * std::sin(angle);
         Vector position = {x, y};
         bodies[i].isDynamic = true;
-        bodies[i].mass = 5.974e24;
-        bodies[i].radius = 1.3927e6;
+        bodies[i].mass = EARTH_MASS;
+        bodies[i].radius = EARTH_DIA;
         bodies[i].position = position;
         bodies[i].velocity = {0.0, 0.0};
         bodies[i].acceleration = {0.0, 0.0};
     }
 
     bodies[n - 1].isDynamic = false;
-    bodies[n - 1].mass = 1.9890e30;
-    bodies[n - 1].radius = 1.3927e6;
+    bodies[n - 1].mass = SUN_MASS;
+    bodies[n - 1].radius = SUN_DIA;
     bodies[n - 1].position = centerPos;
     bodies[n - 1].velocity = {0.0, 0.0};
     bodies[n - 1].acceleration = {0.0, 0.0};
@@ -250,8 +196,8 @@ Body *initSpiralBodies(int n)
 
     Body *bodies = new Body[n];
     srand(time(NULL));
-    double maxDistance = 2.2790e11;
-    double minDistance = 1.4960e11;
+    double maxDistance = MAX_DIST;
+    double minDistance = MIN_DIST;
     Vector centerPos = {CENTERX, CENTERY};
     for (int i = 0; i < n - 1; ++i)
     {
@@ -261,8 +207,8 @@ Body *initSpiralBodies(int n)
         double radius = (maxDistance - minDistance) * (rand() / (double)RAND_MAX) + minDistance;
 
         // Calculate coordinates of the point
-        double x = CENTERX + radius * std::cos(angle);
-        double y = CENTERY + radius * std::sin(angle);
+        double x = centerPos.x + radius * std::cos(angle);
+        double y = centerPos.y + radius * std::sin(angle);
 
         Vector position = {x, y};
 
@@ -271,20 +217,20 @@ Body *initSpiralBodies(int n)
         Vector a = {r.x / distance, r.y / distance};
 
         // Calculate velocity vector components
-        double esc = sqrt((GRAVITY * 1.9891e30) / (distance));
+        double esc = sqrt((GRAVITY * SUN_MASS) / (distance));
         Vector velocity = {-a.y * esc, a.x * esc};
 
         bodies[i].isDynamic = true;
-        bodies[i].mass = 5.974e24;
-        bodies[i].radius = 1.3927e6;
+        bodies[i].mass = EARTH_MASS;
+        bodies[i].radius = EARTH_DIA;
         bodies[i].position = position;
         bodies[i].velocity = velocity;
         bodies[i].acceleration = {0.0, 0.0};
     }
 
     bodies[n - 1].isDynamic = false;
-    bodies[n - 1].mass = 1.9890e30;
-    bodies[n - 1].radius = 1.3927e6;
+    bodies[n - 1].mass = SUN_MASS;
+    bodies[n - 1].radius = SUN_DIA;
     bodies[n - 1].position = centerPos;
     bodies[n - 1].velocity = {0.0, 0.0};
     bodies[n - 1].acceleration = {0.0, 0.0};
@@ -313,17 +259,59 @@ Body *initSolarSystem()
     return bodies;
 }
 
+bool checkArgs(int nBodies, int sim, int iter)
+{
+
+    if (nBodies < 1)
+    {
+        std::cout << "ERROR: need to have at least 1 body" << std::endl;
+        return false;
+    }
+
+    if (sim < 0 || sim > 2)
+    {
+        std::cout << "ERROR: simulation doesn't exist" << std::endl;
+        return false;
+    }
+
+    if (iter < 1)
+    {
+        std::cout << "ERROR: need to have at least 1 iteration" << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
 int main(int argc, char **argv)
 {
     int nBodies = NUM_BODIES;
+    int sim = 0;
     int iters = 300;
-    if (argc == 3)
+    if (argc == 4)
     {
         nBodies = atoi(argv[1]);
-        iters = atoi(argv[2]);
+        sim = atoi(argv[2]);
+        iters = atoi(argv[3]);
     }
 
-    Body *h_bodies = initRandomBodies(nBodies);
+    if (!checkArgs(nBodies, sim, iters))
+        return -1;
+
+    Body *h_bodies;
+    if (sim == 0)
+    {
+        h_bodies = initSpiralBodies(nBodies);
+    }
+    else if (sim == 1)
+    {
+        h_bodies = initRandomBodies(nBodies);
+    }
+    else
+    {
+        nBodies = 5;
+        h_bodies = initSolarSystem();
+    }
 
     int bytes = nBodies * sizeof(Body);
 
@@ -331,18 +319,30 @@ int main(int argc, char **argv)
     CHECK_CUDA_ERROR(cudaMalloc((void **)&d_bodies, bytes));
     CHECK_CUDA_ERROR(cudaMemcpy(d_bodies, h_bodies, bytes, cudaMemcpyHostToDevice));
 
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
     int blockSize = BLOCK_SIZE;
     int gridSize = ceil((double)nBodies / blockSize);
     int it = 0;
+    float exeTime = 0.0;
     while (it < iters) // main loop
     {
-
-        DirectSumTiledKernel<<<gridSize, blockSize>>>(d_bodies, nBodies);
+        cudaEventRecord(start);
+        DirectSumKernel<<<gridSize, blockSize>>>(d_bodies, nBodies);
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        float milliseconds = 0;
+        cudaEventElapsedTime(&milliseconds, start, stop);
+        exeTime += milliseconds;
         CHECK_LAST_CUDA_ERROR();
         CHECK_CUDA_ERROR(cudaMemcpy(h_bodies, d_bodies, bytes, cudaMemcpyDeviceToHost));
         storeFrame(h_bodies, nBodies, ++it);
         // display(bodies);
     }
+    std::cout << "Time: " << exeTime / iters << std::endl;
+
     video.release();
 
     // free memories

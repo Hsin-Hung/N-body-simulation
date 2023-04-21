@@ -16,7 +16,7 @@ class NBody
 
 public:
     std::vector<std::shared_ptr<Body>> bodies;
-    NBody(int n, int i);
+    NBody(int n, int a, int s);
     void update();
 };
 

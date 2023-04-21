@@ -50,20 +50,21 @@ class BarnesHutCuda
 
     void initRandomBodies();
     void initSpiralBodies();
+    void initCollideGalaxy();
     void initSolarSystem();
     void setBody(int i, bool isDynamic, double mass, double radius, Vector position, Vector velocity, Vector acceleration);
-
-public:
-    BarnesHutCuda(int n);
-    ~BarnesHutCuda();
     void resetCUDA();
     void computeBoundingBoxCUDA();
     void constructQuadTreeCUDA();
     void computeCenterMassCUDA();
     void computeForceCUDA();
-    void readDeviceBodies();
+
+public:
+    BarnesHutCuda(int n);
+    ~BarnesHutCuda();
     void update();
-    void setup();
+    void setup(int sim);
+    void readDeviceBodies();
     Body *getBodies();
 };
 

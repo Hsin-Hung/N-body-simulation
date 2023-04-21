@@ -15,7 +15,6 @@ class QuadTree
     double totalMass;
     bool isLeaf;
     std::shared_ptr<Body> b;
-
     std::unique_ptr<QuadTree> topLeftTree;
     std::unique_ptr<QuadTree> topRightTree;
     std::unique_ptr<QuadTree> botLeftTree;

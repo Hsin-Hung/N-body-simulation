@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <chrono>
 #include <GLFW/glfw3.h>
 #include "nBody.h"
 #include "directSum.h"
@@ -10,13 +11,14 @@
 #include "constants.h"
 
 using namespace std;
+using namespace std::chrono;
 
 Vector scaleToWindow(Vector pos)
 {
 
      double scaleX = WINDOW_HEIGHT / NBODY_HEIGHT;
      double scaleY = WINDOW_WIDTH / NBODY_WIDTH;
-     return Vector((pos.x - 0) * scaleX + 800, (pos.y - 0) * scaleY + 800);
+     return Vector((pos.x - 0) * scaleX + WINDOW_WIDTH / 2, (pos.y - 0) * scaleY + WINDOW_HEIGHT / 2);
 }
 
 void drawDots(NBody &nb)
@@ -29,28 +31,55 @@ void drawDots(NBody &nb)
           glPointSize(5);     // set point size to 5 pixels
           glBegin(GL_POINTS); // start drawing points
           Vector pos = scaleToWindow(body->position);
-          // std::cout << "org: " << body->position << std::endl;
           glVertex2f(pos.x, pos.y);
           glEnd(); // end drawing points
      }
 }
 
+bool checkArgs(int nBodies, int alg, int sim)
+{
+
+     if (nBodies < 1)
+     {
+          std::cout << "ERROR: need to have at least 1 body" << std::endl;
+          return false;
+     }
+
+     if (alg < 0 && alg > 1)
+     {
+          std::cout << "ERROR: algorithm doesn't exist" << std::endl;
+          return false;
+     }
+
+     if (sim < 0 || sim > 2)
+     {
+          std::cout << "ERROR: simulation doesn't exist" << std::endl;
+          return false;
+     }
+
+     return true;
+}
+
 int main(int argc, char **argv)
 {
      int nBodies = NUM_BODIES;
-     int i = 0;
-     if (argc == 3)
+     int alg = 0;
+     int sim = 0;
+     if (argc == 4)
      {
           nBodies = atoi(argv[1]);
-          i = atoi(argv[2]);
+          alg = atoi(argv[2]);
+          sim = atoi(argv[3]);
      }
 
-     NBody nb(nBodies, i);
+     if (!checkArgs(nBodies, alg, sim))
+          return -1;
 
+     NBody nb(nBodies, alg, sim);
      // initialize GLFW
      if (!glfwInit())
           return -1;
-     GLFWwindow *window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "nBody", NULL, NULL); // create window
+     GLFWwindow *window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "N-Body Simulation CPU", NULL, NULL); // create window
      if (!window)
      {
           glfwTerminate();
@@ -62,18 +91,26 @@ int main(int argc, char **argv)
      glMatrixMode(GL_PROJECTION);      // set up projection matrix
      glLoadIdentity();
      glOrtho(0.0f, WINDOW_WIDTH, WINDOW_HEIGHT, 0.0f, -1.0f, 1.0f);
+     long long execution_time = 0;
+     long long iter = 0;
      while (!glfwWindowShouldClose(window)) // main loop
      {
           glClear(GL_COLOR_BUFFER_BIT); // clear the screen
 
+          auto start = high_resolution_clock::now();
           nb.update();
+          auto stop = high_resolution_clock::now();
           drawDots(nb);
-
+          execution_time += duration_cast<milliseconds>(stop - start).count();
           glfwSwapBuffers(window); // swap front and back buffers
           glfwPollEvents();        // poll for events
+
+          ++iter;
      }
 
      glfwTerminate(); // terminate GLFW
+
+     std::cout << "average execution time per frame: " << execution_time / iter << " milliseconds" << std::endl;
 
      return 0;
 }

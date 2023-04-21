@@ -79,8 +79,8 @@ void BarnesHutCuda::computeForceCUDA()
 void BarnesHutCuda::initRandomBodies()
 {
     srand(time(NULL));
-    double maxDistance = 2.2790e11;
-    double minDistance = 5.0e10;
+    double maxDistance = MAX_DIST;
+    double minDistance = MIN_DIST;
     Vector centerPos = {CENTERX, CENTERY};
     for (int i = 0; i < nBodies - 1; ++i)
     {
@@ -90,19 +90,19 @@ void BarnesHutCuda::initRandomBodies()
         double radius = (maxDistance - minDistance) * (rand() / (double)RAND_MAX) + minDistance;
 
         // Calculate coordinates of the point
-        double x = CENTERX + radius * std::cos(angle);
-        double y = CENTERY + radius * std::sin(angle);
+        double x = centerPos.x + radius * std::cos(angle);
+        double y = centerPos.y + radius * std::sin(angle);
         Vector position = {x, y};
         h_b[i].isDynamic = true;
-        h_b[i].mass = 5.974e24;
-        h_b[i].radius = 1.3927e6;
+        h_b[i].mass = EARTH_MASS;
+        h_b[i].radius = EARTH_DIA;
         h_b[i].position = position;
         h_b[i].velocity = {0.0, 0.0};
         h_b[i].acceleration = {0.0, 0.0};
     }
     h_b[nBodies - 1].isDynamic = false;
-    h_b[nBodies - 1].mass = 1.9890e30;
-    h_b[nBodies - 1].radius = 1.3927e6;
+    h_b[nBodies - 1].mass = SUN_MASS;
+    h_b[nBodies - 1].radius = SUN_DIA;
     h_b[nBodies - 1].position = centerPos;
     h_b[nBodies - 1].velocity = {0.0, 0.0};
     h_b[nBodies - 1].acceleration = {0.0, 0.0};
@@ -112,8 +112,8 @@ void BarnesHutCuda::initSpiralBodies()
 {
 
     srand(time(NULL));
-    double maxDistance = 2.2790e11;
-    double minDistance = 5.0e10;
+    double maxDistance = MAX_DIST;
+    double minDistance = MIN_DIST;
     Vector centerPos = {CENTERX, CENTERY};
     for (int i = 0; i < nBodies - 1; ++i)
     {
@@ -123,8 +123,8 @@ void BarnesHutCuda::initSpiralBodies()
         double radius = (maxDistance - minDistance) * (rand() / (double)RAND_MAX) + minDistance;
 
         // Calculate coordinates of the point
-        double x = CENTERX + radius * std::cos(angle);
-        double y = CENTERY + radius * std::sin(angle);
+        double x = centerPos.x + radius * std::cos(angle);
+        double y = centerPos.y + radius * std::sin(angle);
         Vector position = {x, y};
 
         double distance = sqrt(pow(x - centerPos.x, 2) + pow(y - centerPos.y, 2));
@@ -132,19 +132,100 @@ void BarnesHutCuda::initSpiralBodies()
         Vector a = {r.x / distance, r.y / distance};
 
         // Calculate velocity vector components
-        double esc = sqrt((GRAVITY * 1.9891e30) / (distance));
+        double esc = sqrt((GRAVITY * SUN_MASS) / (distance));
         Vector velocity = {-a.y * esc, a.x * esc};
 
         h_b[i].isDynamic = true;
-        h_b[i].mass = 5.974e24;
-        h_b[i].radius = 1.3927e6;
+        h_b[i].mass = EARTH_MASS;
+        h_b[i].radius = EARTH_DIA;
         h_b[i].position = position;
         h_b[i].velocity = velocity;
         h_b[i].acceleration = {0.0, 0.0};
     }
     h_b[nBodies - 1].isDynamic = false;
-    h_b[nBodies - 1].mass = 1.9890e30;
-    h_b[nBodies - 1].radius = 1.3927e6;
+    h_b[nBodies - 1].mass = SUN_MASS;
+    h_b[nBodies - 1].radius = SUN_DIA;
+    h_b[nBodies - 1].position = centerPos;
+    h_b[nBodies - 1].velocity = {0.0, 0.0};
+    h_b[nBodies - 1].acceleration = {0.0, 0.0};
+}
+
+void BarnesHutCuda::initCollideGalaxy()
+{
+
+    srand(time(NULL));
+    double maxDistance = MAX_DIST / 4.0;
+    double minDistance = MIN_DIST;
+    Vector centerPos = {-NBODY_WIDTH / 6.0, CENTERY};
+
+    int galaxy1 = nBodies / 2;
+
+    for (int i = 0; i < galaxy1 - 1; ++i)
+    {
+
+        double angle = 2 * M_PI * (rand() / (double)RAND_MAX);
+        // Generate random distance from center within the given max distance
+        double radius = (maxDistance - minDistance) * (rand() / (double)RAND_MAX) + minDistance;
+
+        // Calculate coordinates of the point
+        double x = centerPos.x + radius * std::cos(angle);
+        double y = centerPos.y + radius * std::sin(angle);
+        Vector position = {x, y};
+
+        double distance = sqrt(pow(x - centerPos.x, 2) + pow(y - centerPos.y, 2));
+        Vector r = {position.x - centerPos.x, position.y - centerPos.y};
+        Vector a = {r.x / distance, r.y / distance};
+
+        // Calculate velocity vector components
+        double esc = sqrt((GRAVITY * SUN_MASS) / (distance));
+        Vector velocity = {-a.y * esc, a.x * esc};
+
+        h_b[i].isDynamic = true;
+        h_b[i].mass = EARTH_MASS;
+        h_b[i].radius = EARTH_DIA;
+        h_b[i].position = position;
+        h_b[i].velocity = velocity;
+        h_b[i].acceleration = {0.0, 0.0};
+    }
+    h_b[galaxy1 - 1].isDynamic = true;
+    h_b[galaxy1 - 1].mass = SUN_MASS;
+    h_b[galaxy1 - 1].radius = SUN_DIA;
+    h_b[galaxy1 - 1].position = centerPos;
+    h_b[galaxy1 - 1].velocity = {0.0, 0.0};
+    h_b[galaxy1 - 1].acceleration = {0.0, 0.0};
+
+    centerPos = {NBODY_WIDTH / 6.0, CENTERY};
+
+    for (int i = galaxy1; i < nBodies - 1; ++i)
+    {
+
+        double angle = 2 * M_PI * (rand() / (double)RAND_MAX);
+        // Generate random distance from center within the given max distance
+        double radius = (maxDistance - minDistance) * (rand() / (double)RAND_MAX) + minDistance;
+
+        // Calculate coordinates of the point
+        double x = centerPos.x + radius * std::cos(angle);
+        double y = centerPos.y + radius * std::sin(angle);
+        Vector position = {x, y};
+
+        double distance = sqrt(pow(x - centerPos.x, 2) + pow(y - centerPos.y, 2));
+        Vector r = {position.x - centerPos.x, position.y - centerPos.y};
+        Vector a = {r.x / distance, r.y / distance};
+
+        // Calculate velocity vector components
+        double esc = sqrt((GRAVITY * SUN_MASS) / (distance));
+        Vector velocity = {-a.y * esc, a.x * esc};
+
+        h_b[i].isDynamic = true;
+        h_b[i].mass = EARTH_MASS;
+        h_b[i].radius = EARTH_DIA;
+        h_b[i].position = position;
+        h_b[i].velocity = velocity;
+        h_b[i].acceleration = {0.0, 0.0};
+    }
+    h_b[nBodies - 1].isDynamic = true;
+    h_b[nBodies - 1].mass = SUN_MASS;
+    h_b[nBodies - 1].radius = SUN_DIA;
     h_b[nBodies - 1].position = centerPos;
     h_b[nBodies - 1].velocity = {0.0, 0.0};
     h_b[nBodies - 1].acceleration = {0.0, 0.0};
@@ -180,9 +261,25 @@ void BarnesHutCuda::readDeviceBodies()
     CHECK_CUDA_ERROR(cudaMemcpy(h_b, d_b, sizeof(Body) * nBodies, cudaMemcpyDeviceToHost));
 }
 
-void BarnesHutCuda::setup()
+void BarnesHutCuda::setup(int sim)
 {
-    initSpiralBodies();
+    if (sim == 0)
+    {
+        initSpiralBodies();
+    }
+    else if (sim == 1)
+    {
+        initRandomBodies();
+    }
+    else if (sim == 2)
+    {
+        initCollideGalaxy();
+    }
+    else
+    {
+        initSolarSystem();
+    }
+
     CHECK_CUDA_ERROR(cudaMemcpy(d_b, h_b, sizeof(Body) * nBodies, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_node, h_node, sizeof(Node) * nNodes, cudaMemcpyHostToDevice));
 }

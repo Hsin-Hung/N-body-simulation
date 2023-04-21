@@ -15,7 +15,6 @@ public:
     double getDistance(Vector to);
     double mod();
     double dot(Vector v);
-    Vector normalize();
     Vector operator+(const Vector &rhs);
     Vector operator-(const Vector &rhs);
     Vector operator*(double v);

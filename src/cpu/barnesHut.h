@@ -7,12 +7,11 @@
 #include "constants.h"
 #include "algorithm.h"
 
-#define THETA 0.5
-
 class BarnesHut : public Algorithm
 {
     const double epsilon = 0.5;
     const double dt = 25000.0;
+    const double theta = 0.5;
 
     std::unique_ptr<QuadTree> quadTree;
     void constructQuadTree();
