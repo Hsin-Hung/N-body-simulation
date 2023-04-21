@@ -100,8 +100,8 @@ int main(int argc, char **argv)
           auto start = high_resolution_clock::now();
           nb.update();
           auto stop = high_resolution_clock::now();
-          drawDots(nb);
           execution_time += duration_cast<milliseconds>(stop - start).count();
+          drawDots(nb);
           glfwSwapBuffers(window); // swap front and back buffers
           glfwPollEvents();        // poll for events
 

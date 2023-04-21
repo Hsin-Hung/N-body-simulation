@@ -97,7 +97,6 @@ int main(int argc, char **argv)
     // cudaEvent_t start, stop;
     // cudaEventCreate(&start);
     // cudaEventCreate(&stop);
-    // float exeTime = 0.0;
     for (int i = 0; i < iters; ++i)
     {
         // cudaEventRecord(start);
@@ -106,14 +105,15 @@ int main(int argc, char **argv)
         // cudaEventSynchronize(stop);
         // float milliseconds = 0;
         // cudaEventElapsedTime(&milliseconds, start, stop);
+        // std::cout << "Time: " << milliseconds << std::endl;
+        break;
         // exeTime += milliseconds;
 
         bh->readDeviceBodies();
         storeFrame(bh->getBodies(), nBodies, i);
     }
-    // std::cout << "Time: " << exeTime / iters << std::endl;
 
-    video.release();
+    // video.release();
     delete bh;
     return 0;
 }

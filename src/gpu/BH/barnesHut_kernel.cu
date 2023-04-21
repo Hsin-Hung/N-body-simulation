@@ -35,8 +35,6 @@ __global__ void ResetKernel(Node *node, Vector *topLeft, Vector *botRight, int *
     {
         node[b].start = 0;
         node[b].end = nBodies - 1;
-        *topLeft = {INFINITY, -INFINITY};
-        *botRight = {-INFINITY, INFINITY};
     }
 }
 
@@ -133,113 +131,6 @@ __device__ int getQuadrant(Vector topLeft, Vector botRight, double x, double y)
     }
 }
 
-__device__ bool inBoundary(Vector tl, Vector br, Vector p)
-{
-    return (p.x >= tl.x && p.x <= br.x && p.y <= tl.y && p.y >= br.y);
-}
-
-__device__ void updateBound(Vector &tl, Vector &br, int quadrant)
-{
-    if (quadrant == 1)
-    {
-        tl = {(tl.x + br.x) / 2, tl.y};
-        br = {br.x, (tl.y + br.y) / 2};
-    }
-    else if (quadrant == 2)
-    {
-        tl = {tl.x, tl.y};
-        br = {(tl.x + br.x) / 2, (tl.y + br.y) / 2};
-    }
-    else if (quadrant == 3)
-    {
-        tl = {tl.x, (tl.y + br.y) / 2};
-        br = {(tl.x + br.x) / 2, br.y};
-    }
-    else
-    {
-        tl = {(tl.x + br.x) / 2, (tl.y + br.y) / 2};
-        br = {br.x, br.y};
-    }
-}
-
-__device__ void ConstructQuadTreeHelper(Node *node, int nodeIndex, Body body, Vector *topLeft, Vector *botRight, int *mutex, int nNodes, int nBodies, int leafLimit)
-{
-
-    Vector tl = *topLeft;
-    Vector br = *botRight;
-
-    while (nodeIndex < nNodes)
-    {
-
-        Node &curNode = node[nodeIndex];
-
-        if (!inBoundary(tl, br, body.position))
-        {
-            break;
-        }
-
-        if (nodeIndex >= leafLimit)
-        {
-
-            if (curNode.centerMass.x != -1)
-            {
-
-                double M = curNode.totalMass + body.mass;
-                double Rx = (curNode.totalMass * curNode.centerMass.x + body.mass * curNode.centerMass.x) / M;
-                double Ry = (curNode.totalMass * curNode.centerMass.y + body.mass * curNode.centerMass.y) / M;
-                curNode.totalMass = M;
-                curNode.centerMass = {Rx, Ry};
-            }
-            else
-            {
-                curNode.totalMass = body.mass;
-                curNode.centerMass = body.position;
-            }
-            break;
-        }
-
-        // If node x does not contain a body, put the new body here.
-        if (curNode.isLeaf)
-        {
-            if (curNode.centerMass.x != -1)
-            {
-
-                int quadrant = getQuadrant(tl, br, curNode.centerMass.x, curNode.centerMass.y);
-                Node &childNode = node[(nodeIndex * 4) + quadrant];
-                childNode.centerMass = curNode.centerMass;
-                childNode.totalMass = curNode.totalMass;
-
-                curNode.centerMass = {-1, -1};
-                curNode.totalMass = 0.0;
-                curNode.isLeaf = false;
-            }
-            else
-            {
-
-                curNode.centerMass = body.position;
-                curNode.totalMass = body.mass;
-                break;
-            }
-        }
-
-        int quadrant = getQuadrant(tl, br, body.position.x, body.position.y);
-        updateBound(tl, br, quadrant);
-        nodeIndex = (nodeIndex * 4) + quadrant;
-    }
-}
-
-__global__ void ConstructQuadTreeKernel(Node *node, Body *bodies, Vector *topLeft, Vector *botRight, int *mutex, int nNodes, int nBodies, int leafLimit)
-{
-
-    int b = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (b < nBodies)
-    {
-        Body body = bodies[b];
-        ConstructQuadTreeHelper(node, 0, body, topLeft, botRight, mutex, nNodes, nBodies, leafLimit);
-    }
-}
-
 __device__ void UpdateChildBound(Vector &tl, Vector &br, Node &childNode, int quadrant)
 {
 
@@ -265,29 +156,77 @@ __device__ void UpdateChildBound(Vector &tl, Vector &br, Node &childNode, int qu
     }
 }
 
-__device__ void ComputeCenterMass(Node &curNode, Body *bodies, int start, int end)
+__device__ void warpReduce(volatile double *totalMass, volatile double2 *centerMass, int tx)
+{
+    totalMass[tx] += totalMass[tx + 32];
+    centerMass[tx].x += centerMass[tx + 32].x;
+    centerMass[tx].y += centerMass[tx + 32].y;
+    totalMass[tx] += totalMass[tx + 16];
+    centerMass[tx].x += centerMass[tx + 16].x;
+    centerMass[tx].y += centerMass[tx + 16].y;
+    totalMass[tx] += totalMass[tx + 8];
+    centerMass[tx].x += centerMass[tx + 8].x;
+    centerMass[tx].y += centerMass[tx + 8].y;
+    totalMass[tx] += totalMass[tx + 4];
+    centerMass[tx].x += centerMass[tx + 4].x;
+    centerMass[tx].y += centerMass[tx + 4].y;
+    totalMass[tx] += totalMass[tx + 2];
+    centerMass[tx].x += centerMass[tx + 2].x;
+    centerMass[tx].y += centerMass[tx + 2].y;
+    totalMass[tx] += totalMass[tx + 1];
+    centerMass[tx].x += centerMass[tx + 1].x;
+    centerMass[tx].y += centerMass[tx + 1].y;
+}
+
+__device__ void ComputeCenterMass(Node &curNode, Body *bodies, double *totalMass, double2 *centerMass, int start, int end)
 {
     int tx = threadIdx.x;
-    double M = curNode.totalMass;
-    double Rx = curNode.totalMass * curNode.centerMass.x;
-    double Ry = curNode.totalMass * curNode.centerMass.y;
+    int total = end - start + 1;
+    int sz = ceil((double)total / blockDim.x);
+    int s = tx * sz + start;
+    double M = 0.0;
+    double2 R = make_double2(0.0, 0.0);
 
-    for (int i = start; i <= end; ++i)
+    for (int i = s; i < s + sz; ++i)
     {
-        Body &body = bodies[i];
-        M += body.mass;
-        Rx += body.mass * body.position.x;
-        Ry += body.mass * body.position.y;
+        if (i <= end)
+        {
+            Body &body = bodies[i];
+            M += body.mass;
+            R.x += body.mass * body.position.x;
+            R.y += body.mass * body.position.y;
+        }
     }
+
+    totalMass[tx] = M;
+    centerMass[tx] = R;
+
+    for (unsigned int stride = blockDim.x / 2; stride > 32; stride >>= 1)
+    {
+        __syncthreads();
+        if (tx < stride)
+        {
+            totalMass[tx] += totalMass[tx + stride];
+            centerMass[tx].x += centerMass[tx + stride].x;
+            centerMass[tx].y += centerMass[tx + stride].y;
+        }
+    }
+
+    if (tx < 32)
+    {
+        warpReduce(totalMass, centerMass, tx);
+    }
+    __syncthreads();
 
     if (tx == 0)
     {
-        Rx /= M;
-        Ry /= M;
-        curNode.totalMass = M;
-        curNode.centerMass = {Rx, Ry};
+        centerMass[0].x /= totalMass[0];
+        centerMass[0].y /= totalMass[0];
+        curNode.totalMass = totalMass[0];
+        curNode.centerMass = {centerMass[0].x, centerMass[0].y};
     }
 }
+
 __device__ void CountBodies(Body *bodies, Vector topLeft, Vector botRight, int *count, int start, int end, int nBodies)
 {
     int tx = threadIdx.x;
@@ -297,7 +236,7 @@ __device__ void CountBodies(Body *bodies, Vector topLeft, Vector botRight, int *
 
     for (int i = start + tx; i <= end; i += blockDim.x)
     {
-        Body &body = bodies[i];
+        Body body = bodies[i];
         int q = getQuadrant(topLeft, botRight, body.position.x, body.position.y);
         atomicAdd(&count[q - 1], 1);
     }
@@ -325,7 +264,7 @@ __device__ void GroupBodies(Body *bodies, Body *buffer, Vector topLeft, Vector b
     int *count2 = &count[4];
     for (int i = start + threadIdx.x; i <= end; i += blockDim.x)
     {
-        Body &body = bodies[i];
+        Body body = bodies[i];
         int q = getQuadrant(topLeft, botRight, body.position.x, body.position.y);
         int dest = atomicAdd(&count2[q - 1], 1);
         buffer[dest] = body;
@@ -333,9 +272,11 @@ __device__ void GroupBodies(Body *bodies, Body *buffer, Vector topLeft, Vector b
     __syncthreads();
 }
 
-__global__ void ConstructQuadTreeDPKernel(Node *node, Body *bodies, Body *buffer, int nodeIndex, int nNodes, int nBodies, int leafLimit)
+__global__ void ConstructQuadTreeKernel(Node *node, Body *bodies, Body *buffer, int nodeIndex, int nNodes, int nBodies, int leafLimit)
 {
     __shared__ int count[8];
+    __shared__ double totalMass[BLOCK_SIZE];
+    __shared__ double2 centerMass[BLOCK_SIZE];
     int tx = threadIdx.x;
     nodeIndex += blockIdx.x;
 
@@ -349,8 +290,7 @@ __global__ void ConstructQuadTreeDPKernel(Node *node, Body *bodies, Body *buffer
     if (start == -1 && end == -1)
         return;
 
-    ComputeCenterMass(curNode, bodies, start, end);
-
+    ComputeCenterMass(curNode, bodies, totalMass, centerMass, start, end);
     if (nodeIndex >= leafLimit || start == end)
     {
         for (int i = start; i <= end; ++i)
@@ -365,11 +305,10 @@ __global__ void ConstructQuadTreeDPKernel(Node *node, Body *bodies, Body *buffer
     ComputeOffset(count, start);
     GroupBodies(bodies, buffer, topLeft, botRight, count, start, end, nBodies);
 
-    Node &topLNode = node[(nodeIndex * 4) + 2],
-         &topRNode = node[(nodeIndex * 4) + 1], &botLNode = node[(nodeIndex * 4) + 3], &botRNode = node[(nodeIndex * 4) + 4];
-
     if (tx == 0)
     {
+        Node &topLNode = node[(nodeIndex * 4) + 2],
+             &topRNode = node[(nodeIndex * 4) + 1], &botLNode = node[(nodeIndex * 4) + 3], &botRNode = node[(nodeIndex * 4) + 4];
 
         UpdateChildBound(topLeft, botRight, topLNode, 2);
         UpdateChildBound(topLeft, botRight, topRNode, 1);
@@ -401,47 +340,7 @@ __global__ void ConstructQuadTreeDPKernel(Node *node, Body *bodies, Body *buffer
             botRNode.start = start + count[0] + count[1] + count[2];
             botRNode.end = end;
         }
-        ConstructQuadTreeDPKernel<<<4, BLOCK_SIZE>>>(node, buffer, bodies, nodeIndex * 4 + 1, nNodes, nBodies, leafLimit);
-    }
-}
-
-/*
-----------------------------------------------------------------------------------------
-COMPUTE CENTER MASS
-----------------------------------------------------------------------------------------
-*/
-
-__global__ void ComputeCenterMass(Node *node, int nNodes, int start, int end)
-{
-    int nodeIndex = blockIdx.x * blockDim.x + threadIdx.x;
-    nodeIndex += start;
-    if (nodeIndex >= start && nodeIndex < end)
-    {
-
-        Node &curNode = node[nodeIndex];
-
-        if (!curNode.isLeaf)
-        {
-
-            Node &topLNode = node[(nodeIndex * 4) + 2], &topRNode = node[(nodeIndex * 4) + 1], &botLNode = node[(nodeIndex * 4) + 3], &botRNode = node[(nodeIndex * 4) + 4];
-            double totalChildMass = topLNode.totalMass + topRNode.totalMass + botLNode.totalMass + botRNode.totalMass;
-            double totalCenterMassX = 0.0, totalCenterMassY = 0.0;
-
-            totalCenterMassX += topLNode.centerMass.x * topLNode.totalMass;
-            totalCenterMassY += topLNode.centerMass.y * topLNode.totalMass;
-
-            totalCenterMassX += topRNode.centerMass.x * topRNode.totalMass;
-            totalCenterMassY += topRNode.centerMass.y * topRNode.totalMass;
-
-            totalCenterMassX += botLNode.centerMass.x * botLNode.totalMass;
-            totalCenterMassY += botLNode.centerMass.y * botLNode.totalMass;
-
-            totalCenterMassX += botRNode.centerMass.x * botRNode.totalMass;
-            totalCenterMassY += botRNode.centerMass.y * botRNode.totalMass;
-
-            curNode.totalMass = totalChildMass;
-            curNode.centerMass = {totalCenterMassX / totalChildMass, totalCenterMassY / totalChildMass};
-        }
+        ConstructQuadTreeKernel<<<4, BLOCK_SIZE>>>(node, buffer, bodies, nodeIndex * 4 + 1, nNodes, nBodies, leafLimit);
     }
 }
 
@@ -457,77 +356,56 @@ __device__ double getDistance(Vector pos1, Vector pos2)
     return sqrt(pow(pos1.x - pos2.x, 2) + pow(pos1.y - pos2.y, 2));
 }
 
-__device__ bool isCollide(Body &b1, Body &b2)
-{
-    return b1.radius + b2.radius + COLLISION_TH > getDistance(b1.position, b2.position);
-}
-
 __device__ bool isCollide(Body &b1, Vector cm)
 {
     return b1.radius * 2 + COLLISION_TH > getDistance(b1.position, cm);
 }
 
-__device__ void ComputeForce(Node *node, Body *bodies, int bodyIndex, int nNodes, int nBodies, int leafLimit, double width)
+__device__ void ComputeForce(Node *node, Body *bodies, int nodeIndex, int bodyIndex, int nNodes, int nBodies, int leafLimit, double width)
 {
-    Body &bi = bodies[bodyIndex];
-    int q_size = MAX_NODES - N_LEAF;
-    int queue[MAX_NODES - N_LEAF];
-    int front = 0, insert = 0;
-    int size;
-    queue[insert++] = 0;
 
-    while (front != insert)
+    if (nodeIndex >= nNodes)
     {
-        size = insert - front;
-
-        for (int i = 0; i < size; ++i)
+        return;
+    }
+    Node curNode = node[nodeIndex];
+    Body bi = bodies[bodyIndex];
+    if (curNode.isLeaf)
+    {
+        if (curNode.centerMass.x != -1 && !isCollide(bi, curNode.centerMass))
         {
+            Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
+            double r = sqrt((rij.x * rij.x) + (rij.y * rij.y) + (E * E));
+            double f = (GRAVITY * bi.mass * curNode.totalMass) / (r * r * r + (E * E));
+            Vector force = {rij.x * f, rij.y * f};
 
-            int nodeIndex = queue[front++];
-            front %= q_size;
-            Node &curNode = node[nodeIndex];
+            bodies[bodyIndex].acceleration.x += (force.x / bi.mass);
+            bodies[bodyIndex].acceleration.y += (force.y / bi.mass);
+        }
+        return;
+    }
 
-            if (curNode.isLeaf)
-            {
-                if (curNode.centerMass.x != -1 && !isCollide(bi, curNode.centerMass))
-                {
-                    Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
-                    double r = sqrt((rij.x * rij.x) + (rij.y * rij.y) + (E * E));
-                    double f = (GRAVITY * bi.mass * curNode.totalMass) / (r * r * r + (E * E));
-                    Vector force = {rij.x * f, rij.y * f};
-                    bi.acceleration.x += (force.x / bi.mass);
-                    bi.acceleration.y += (force.y / bi.mass);
-                }
-                continue;
-            }
+    double sd = width / getDistance(bi.position, curNode.centerMass);
+    if (sd < THETA)
+    {
+        if (!isCollide(bi, curNode.centerMass))
+        {
+            Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
+            double r = sqrt((rij.x * rij.x) + (rij.y * rij.y) + (E * E));
+            double f = (GRAVITY * bi.mass * curNode.totalMass) / (r * r * r + (E * E));
+            Vector force = {rij.x * f, rij.y * f};
 
-            double sd = width / getDistance(bi.position, curNode.centerMass);
-            if (sd < THETA)
-            {
-                Vector rij = {curNode.centerMass.x - bi.position.x, curNode.centerMass.y - bi.position.y};
-                if (isCollide(bi, curNode.centerMass))
-                    continue;
-                double r = sqrt((rij.x * rij.x) + (rij.y * rij.y) + (E * E));
-                double f = (GRAVITY * bi.mass * curNode.totalMass) / (r * r * r + (E * E));
-                Vector force = {rij.x * f, rij.y * f};
-                bi.acceleration.x += (force.x / bi.mass);
-                bi.acceleration.y += (force.y / bi.mass);
-                continue;
-            }
-
-            if (node[(nodeIndex * 4) + 1].totalMass > 0)
-                queue[insert++] = (nodeIndex * 4) + 1;
-            if (node[(nodeIndex * 4) + 2].totalMass > 0)
-                queue[insert++] = (nodeIndex * 4) + 2;
-            if (node[(nodeIndex * 4) + 3].totalMass > 0)
-                queue[insert++] = (nodeIndex * 4) + 3;
-            if (node[(nodeIndex * 4) + 4].totalMass > 0)
-                queue[insert++] = (nodeIndex * 4) + 4;
-            insert %= q_size;
+            bodies[bodyIndex].acceleration.x += (force.x / bi.mass);
+            bodies[bodyIndex].acceleration.y += (force.y / bi.mass);
         }
 
-        width /= 2.0;
+        return;
     }
+
+    ComputeForce(node, bodies, (nodeIndex * 4) + 1, bodyIndex, nNodes, nBodies, leafLimit, width / 2);
+    ComputeForce(node, bodies, (nodeIndex * 4) + 2, bodyIndex, nNodes, nBodies, leafLimit, width / 2);
+    ComputeForce(node, bodies, (nodeIndex * 4) + 3, bodyIndex, nNodes, nBodies, leafLimit, width / 2);
+    ComputeForce(node, bodies, (nodeIndex * 4) + 4, bodyIndex, nNodes, nBodies, leafLimit, width / 2);
 }
 
 __global__ void ComputeForceKernel(Node *node, Body *bodies, int nNodes, int nBodies, int leafLimit)
@@ -542,7 +420,7 @@ __global__ void ComputeForceKernel(Node *node, Body *bodies, int nNodes, int nBo
         if (bi.isDynamic)
         {
             bi.acceleration = {0.0, 0.0};
-            ComputeForce(node, bodies, i, nNodes, nBodies, leafLimit, width);
+            ComputeForce(node, bodies, 0, i, nNodes, nBodies, leafLimit, width);
             bi.velocity.x += bi.acceleration.x * DT;
             bi.velocity.y += bi.acceleration.y * DT;
             bi.position.x += bi.velocity.x * DT;

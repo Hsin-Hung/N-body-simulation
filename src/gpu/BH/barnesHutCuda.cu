@@ -52,26 +52,12 @@ void BarnesHutCuda::constructQuadTreeCUDA()
 {
     int blockSize = BLOCK_SIZE;
     dim3 gridSize = ceil((float)nBodies / blockSize);
-    ConstructQuadTreeDPKernel<<<1, blockSize>>>(d_node, d_b, d_b_buffer, 0, nNodes, nBodies, leafLimit);
+    ConstructQuadTreeKernel<<<1, blockSize>>>(d_node, d_b, d_b_buffer, 0, nNodes, nBodies, leafLimit);
 }
-void BarnesHutCuda::computeCenterMassCUDA()
-{
-    int start = leafLimit, end = nNodes;
-    int totalNodes = end - start, temp = 0;
-    while (end > start)
-    {
-        int blockSize = BLOCK_SIZE;
-        dim3 gridSize = ceil((float)totalNodes / blockSize);
-        ComputeCenterMass<<<gridSize, blockSize>>>(d_node, nNodes, start, end);
-        totalNodes /= 4;
-        temp = start;
-        end = start;
-        start = temp - totalNodes;
-    }
-}
+
 void BarnesHutCuda::computeForceCUDA()
 {
-    int blockSize = 256;
+    int blockSize = 32;
     dim3 gridSize = ceil((float)nBodies / blockSize);
     ComputeForceKernel<<<gridSize, blockSize>>>(d_node, d_b, nNodes, nBodies, leafLimit);
 }
@@ -285,9 +271,42 @@ void BarnesHutCuda::setup(int sim)
 }
 void BarnesHutCuda::update()
 {
+    // cudaEvent_t start, stop;
+    // cudaEventCreate(&start);
+    // cudaEventCreate(&stop);
+    // float milliseconds = 0;
+
+    // cudaEventRecord(start);
     resetCUDA();
+    // cudaEventRecord(stop);
+    // cudaEventSynchronize(stop);
+    // milliseconds = 0;
+    // cudaEventElapsedTime(&milliseconds, start, stop);
+    // std::cout << "Reset Time: " << milliseconds << std::endl;
+
+    // cudaEventRecord(start);
     computeBoundingBoxCUDA();
+    // cudaEventRecord(stop);
+    // cudaEventSynchronize(stop);
+    // milliseconds = 0;
+    // cudaEventElapsedTime(&milliseconds, start, stop);
+    // std::cout << "Compute bounding box Time: " << milliseconds << std::endl;
+
+    // cudaEventRecord(start);
     constructQuadTreeCUDA();
+    // cudaEventRecord(stop);
+    // cudaEventSynchronize(stop);
+    // milliseconds = 0;
+    // cudaEventElapsedTime(&milliseconds, start, stop);
+    // std::cout << "Construct quadtree Time: " << milliseconds << std::endl;
+
+    // cudaEventRecord(start);
     computeForceCUDA();
+    // cudaEventRecord(stop);
+    // cudaEventSynchronize(stop);
+    // milliseconds = 0;
+    // cudaEventElapsedTime(&milliseconds, start, stop);
+    // std::cout << "Compute force Time: " << milliseconds << std::endl;
+
     CHECK_LAST_CUDA_ERROR();
 }

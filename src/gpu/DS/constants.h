@@ -11,8 +11,8 @@
 #define DT 25000
 #define CENTERX 0
 #define CENTERY 0
-#define COLLISION_TH 5.0e10
-#define MIN_DIST 5.0e10
+#define COLLISION_TH 1.0e10
+#define MIN_DIST 2.0e10
 #define MAX_DIST 2.2790e11
 #define SUN_MASS 1.9890e30
 #define SUN_DIA 1.3927e6

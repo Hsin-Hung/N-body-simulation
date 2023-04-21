@@ -56,7 +56,6 @@ class BarnesHutCuda
     void resetCUDA();
     void computeBoundingBoxCUDA();
     void constructQuadTreeCUDA();
-    void computeCenterMassCUDA();
     void computeForceCUDA();
 
 public:

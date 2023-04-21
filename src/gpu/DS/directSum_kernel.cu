@@ -42,44 +42,6 @@ __device__ bool isCollide(Body &b1, Body &b2)
     return b1.radius + b2.radius + COLLISION_TH > getDistance(b1.position, b2.position);
 }
 
-__global__ void DirectSumKernel(Body *bodies, int n)
-{
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (i < n)
-    {
-        Body &bi = bodies[i];
-        double fx = 0.0, fy = 0.0;
-        if (bi.isDynamic)
-        {
-
-            bi.acceleration = {0.0, 0.0};
-            for (int b = 0; b < n; ++b)
-            {
-                if (b != i)
-                {
-                    Body &bj = bodies[b];
-                    if (!isCollide(bi, bj))
-                    {
-                        Vector rij = {bj.position.x - bi.position.x, bj.position.y - bi.position.y};
-                        double r = sqrt((rij.x * rij.x) + (rij.y * rij.y) + (E * E));
-                        double f = (GRAVITY * bi.mass * bj.mass) / (r * r * r + (E * E));
-                        Vector force = {rij.x * f, rij.y * f};
-                        fx += (force.x / bi.mass);
-                        fy += (force.y / bi.mass);
-                    }
-                }
-            }
-            bi.acceleration.x += fx;
-            bi.acceleration.y += fy;
-            bi.velocity.x += bi.acceleration.x * DT;
-            bi.velocity.y += bi.acceleration.y * DT;
-            bi.position.x += bi.velocity.x * DT;
-            bi.position.y += bi.velocity.y * DT;
-        }
-    }
-}
-
 __global__ void DirectSumTiledKernel(Body *bodies, int n)
 {
     __shared__ Body Bds[BLOCK_SIZE];
@@ -330,20 +292,22 @@ int main(int argc, char **argv)
     while (it < iters) // main loop
     {
         cudaEventRecord(start);
-        DirectSumKernel<<<gridSize, blockSize>>>(d_bodies, nBodies);
+        DirectSumTiledKernel<<<gridSize, blockSize>>>(d_bodies, nBodies);
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
         float milliseconds = 0;
         cudaEventElapsedTime(&milliseconds, start, stop);
-        exeTime += milliseconds;
+        std::cout << "Time: " << milliseconds << std::endl;
+        break;
+        // exeTime += milliseconds;
         CHECK_LAST_CUDA_ERROR();
         CHECK_CUDA_ERROR(cudaMemcpy(h_bodies, d_bodies, bytes, cudaMemcpyDeviceToHost));
         storeFrame(h_bodies, nBodies, ++it);
         // display(bodies);
     }
-    std::cout << "Time: " << exeTime / iters << std::endl;
+    // std::cout << "Time: " << exeTime / iters << std::endl;
 
-    video.release();
+    // video.release();
 
     // free memories
     CHECK_CUDA_ERROR(cudaFree(d_bodies));
