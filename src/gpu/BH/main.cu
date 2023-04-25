@@ -9,16 +9,6 @@
 
 cv::VideoWriter video("nbody.avi", cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, cv::Size(WINDOW_WIDTH, WINDOW_HEIGHT));
 
-void display(Body *bodies, int nBodies)
-{
-    for (int i = 0; i < nBodies; ++i)
-    {
-        std::cout << bodies[i].position.x << " " << bodies[i].position.y << std::endl;
-    }
-
-    std::cout << std::endl;
-}
-
 Vector scaleToWindow(Vector pos)
 {
 
@@ -36,6 +26,8 @@ void storeFrame(Body *bodies, int n, int id)
     {
         Vector pos = scaleToWindow(bodies[i].position);
         cv::Point center(pos.x, pos.y);
+
+        // stars will be red and planets will be white
         if (bodies[i].mass >= HBL)
         {
             color = cv::Scalar(0, 0, 255);
@@ -49,7 +41,6 @@ void storeFrame(Body *bodies, int n, int id)
         cv::circle(image, center, radius, color, -1);
     }
     video.write(image);
-    // cv::imwrite("frame" + std::to_string(id) + ".jpg", image);
 }
 
 bool checkArgs(int nBodies, int sim, int iter)
@@ -91,29 +82,20 @@ int main(int argc, char **argv)
     if (!checkArgs(nBodies, sim, iters))
         return -1;
 
+    if (sim == 3)
+        nBodies = 5;
+
     BarnesHutCuda *bh = new BarnesHutCuda(nBodies);
     bh->setup(sim);
 
-    // cudaEvent_t start, stop;
-    // cudaEventCreate(&start);
-    // cudaEventCreate(&stop);
     for (int i = 0; i < iters; ++i)
     {
-        // cudaEventRecord(start);
         bh->update();
-        // cudaEventRecord(stop);
-        // cudaEventSynchronize(stop);
-        // float milliseconds = 0;
-        // cudaEventElapsedTime(&milliseconds, start, stop);
-        // std::cout << "Time: " << milliseconds << std::endl;
-        break;
-        // exeTime += milliseconds;
-
         bh->readDeviceBodies();
         storeFrame(bh->getBodies(), nBodies, i);
     }
 
-    // video.release();
+    video.release();
     delete bh;
     return 0;
 }

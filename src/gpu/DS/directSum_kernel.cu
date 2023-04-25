@@ -89,12 +89,6 @@ __global__ void DirectSumTiledKernel(Body *bodies, int n)
     }
 }
 
-void display(Body *bodies)
-{
-
-    std::cout << bodies[0].position.x << " " << bodies[0].position.y << std::endl;
-}
-
 Vector scaleToWindow(Vector pos)
 {
 
@@ -281,33 +275,17 @@ int main(int argc, char **argv)
     CHECK_CUDA_ERROR(cudaMalloc((void **)&d_bodies, bytes));
     CHECK_CUDA_ERROR(cudaMemcpy(d_bodies, h_bodies, bytes, cudaMemcpyHostToDevice));
 
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-
     int blockSize = BLOCK_SIZE;
     int gridSize = ceil((double)nBodies / blockSize);
     int it = 0;
-    float exeTime = 0.0;
     while (it < iters) // main loop
     {
-        cudaEventRecord(start);
         DirectSumTiledKernel<<<gridSize, blockSize>>>(d_bodies, nBodies);
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        float milliseconds = 0;
-        cudaEventElapsedTime(&milliseconds, start, stop);
-        std::cout << "Time: " << milliseconds << std::endl;
-        break;
-        // exeTime += milliseconds;
         CHECK_LAST_CUDA_ERROR();
         CHECK_CUDA_ERROR(cudaMemcpy(h_bodies, d_bodies, bytes, cudaMemcpyDeviceToHost));
         storeFrame(h_bodies, nBodies, ++it);
-        // display(bodies);
     }
-    // std::cout << "Time: " << exeTime / iters << std::endl;
-
-    // video.release();
+    video.release();
 
     // free memories
     CHECK_CUDA_ERROR(cudaFree(d_bodies));

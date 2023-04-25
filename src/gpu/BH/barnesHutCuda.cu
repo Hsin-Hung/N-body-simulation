@@ -271,42 +271,9 @@ void BarnesHutCuda::setup(int sim)
 }
 void BarnesHutCuda::update()
 {
-    // cudaEvent_t start, stop;
-    // cudaEventCreate(&start);
-    // cudaEventCreate(&stop);
-    // float milliseconds = 0;
-
-    // cudaEventRecord(start);
     resetCUDA();
-    // cudaEventRecord(stop);
-    // cudaEventSynchronize(stop);
-    // milliseconds = 0;
-    // cudaEventElapsedTime(&milliseconds, start, stop);
-    // std::cout << "Reset Time: " << milliseconds << std::endl;
-
-    // cudaEventRecord(start);
     computeBoundingBoxCUDA();
-    // cudaEventRecord(stop);
-    // cudaEventSynchronize(stop);
-    // milliseconds = 0;
-    // cudaEventElapsedTime(&milliseconds, start, stop);
-    // std::cout << "Compute bounding box Time: " << milliseconds << std::endl;
-
-    // cudaEventRecord(start);
     constructQuadTreeCUDA();
-    // cudaEventRecord(stop);
-    // cudaEventSynchronize(stop);
-    // milliseconds = 0;
-    // cudaEventElapsedTime(&milliseconds, start, stop);
-    // std::cout << "Construct quadtree Time: " << milliseconds << std::endl;
-
-    // cudaEventRecord(start);
     computeForceCUDA();
-    // cudaEventRecord(stop);
-    // cudaEventSynchronize(stop);
-    // milliseconds = 0;
-    // cudaEventElapsedTime(&milliseconds, start, stop);
-    // std::cout << "Compute force Time: " << milliseconds << std::endl;
-
     CHECK_LAST_CUDA_ERROR();
 }

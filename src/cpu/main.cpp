@@ -91,26 +91,16 @@ int main(int argc, char **argv)
      glMatrixMode(GL_PROJECTION);      // set up projection matrix
      glLoadIdentity();
      glOrtho(0.0f, WINDOW_WIDTH, WINDOW_HEIGHT, 0.0f, -1.0f, 1.0f);
-     long long execution_time = 0;
-     long long iter = 0;
      while (!glfwWindowShouldClose(window)) // main loop
      {
           glClear(GL_COLOR_BUFFER_BIT); // clear the screen
-
-          auto start = high_resolution_clock::now();
           nb.update();
-          auto stop = high_resolution_clock::now();
-          execution_time += duration_cast<milliseconds>(stop - start).count();
           drawDots(nb);
           glfwSwapBuffers(window); // swap front and back buffers
           glfwPollEvents();        // poll for events
-
-          ++iter;
      }
 
      glfwTerminate(); // terminate GLFW
-
-     std::cout << "average execution time per frame: " << execution_time / iter << " milliseconds" << std::endl;
 
      return 0;
 }
