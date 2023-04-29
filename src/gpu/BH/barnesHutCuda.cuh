@@ -54,15 +54,11 @@ class BarnesHutCuda
 
     Body *h_b;
     Node *h_node;
-    Vector *h_topLeft;
-    Vector *h_botRight;
 
     Body *d_b;
     Body *d_b_buffer;
     Node *d_node;
     int *d_mutex;
-    Vector *d_topLeft;
-    Vector *d_botRight;
 
     void initRandomBodies();
     void initSpiralBodies();

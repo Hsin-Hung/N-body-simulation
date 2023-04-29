@@ -31,7 +31,7 @@
 RESET KERNEL
 ----------------------------------------------------------------------------------------
 */
-__global__ void ResetKernel(Node *node, Vector *topLeft, Vector *botRight, int *mutex, int nNodes, int nBodies)
+__global__ void ResetKernel(Node *node, int *mutex, int nNodes, int nBodies)
 {
     int b = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -59,7 +59,7 @@ __global__ void ResetKernel(Node *node, Vector *topLeft, Vector *botRight, int *
 COMPUTE BOUNDING BOX
 ----------------------------------------------------------------------------------------
 */
-__global__ void ComputeBoundingBoxKernel(Node *node, Body *bodies, Vector *topLeft, Vector *botRight, int *mutex, int nBodies)
+__global__ void ComputeBoundingBoxKernel(Node *node, Body *bodies, int *mutex, int nBodies)
 {
 
     __shared__ double topLeftX[BLOCK_SIZE];

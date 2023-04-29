@@ -26,14 +26,10 @@ BarnesHutCuda::BarnesHutCuda(int n) : nBodies(n)
     leafLimit = MAX_NODES - N_LEAF;
     h_b = new Body[n];
     h_node = new Node[nNodes];
-    h_topLeft = new Vector;
-    h_botRight = new Vector;
 
     CHECK_CUDA_ERROR(cudaMalloc((void **)&d_b, sizeof(Body) * n));
     CHECK_CUDA_ERROR(cudaMalloc((void **)&d_node, sizeof(Node) * nNodes));
     CHECK_CUDA_ERROR(cudaMalloc((void **)&d_mutex, sizeof(int) * nNodes));
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_topLeft, sizeof(Vector)));
-    CHECK_CUDA_ERROR(cudaMalloc((void **)&d_botRight, sizeof(Vector)));
     CHECK_CUDA_ERROR(cudaMalloc((void **)&d_b_buffer, sizeof(Body) * n));
 }
 
@@ -42,13 +38,9 @@ BarnesHutCuda::~BarnesHutCuda()
 
     delete[] h_b;
     delete[] h_node;
-    delete h_topLeft;
-    delete h_botRight;
     CHECK_CUDA_ERROR(cudaFree(d_b));
     CHECK_CUDA_ERROR(cudaFree(d_node));
     CHECK_CUDA_ERROR(cudaFree(d_mutex));
-    CHECK_CUDA_ERROR(cudaFree(d_topLeft));
-    CHECK_CUDA_ERROR(cudaFree(d_botRight));
     CHECK_CUDA_ERROR(cudaFree(d_b_buffer));
 }
 
@@ -56,13 +48,13 @@ void BarnesHutCuda::resetCUDA()
 {
     int blockSize = BLOCK_SIZE;
     dim3 gridSize = ceil((float)nNodes / blockSize);
-    ResetKernel<<<gridSize, blockSize>>>(d_node, d_topLeft, d_botRight, d_mutex, nNodes, nBodies);
+    ResetKernel<<<gridSize, blockSize>>>(d_node, d_mutex, nNodes, nBodies);
 }
 void BarnesHutCuda::computeBoundingBoxCUDA()
 {
     int blockSize = BLOCK_SIZE;
     dim3 gridSize = ceil((float)nBodies / blockSize);
-    ComputeBoundingBoxKernel<<<gridSize, blockSize>>>(d_node, d_b, d_topLeft, d_botRight, d_mutex, nBodies);
+    ComputeBoundingBoxKernel<<<gridSize, blockSize>>>(d_node, d_b, d_mutex, nBodies);
 }
 void BarnesHutCuda::constructQuadTreeCUDA()
 {
