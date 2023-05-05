@@ -6,7 +6,7 @@ This project implements N-body simulations for both CPU and CUDA versions, using
 
 N-body simulation is a computational technique used in astrophysics to simulate the evolution of a system of particles, such as stars or galaxies, under the influence of gravitational forces. This project implements two different algorithms for N-body simulation: direct sum and Barnes-Hut. The direct sum algorithm is a simple but computationally expensive method that calculates the gravitational force between all pairs of particles. The Barnes-Hut algorithm is a more efficient method that uses a hierarchical tree structure to approximate the gravitational force between distant particles.
 
-In addition to the algorithms, this project includes both CPU and CUDA versions of the simulation. The CPU version is implemented using C++ and OpenGL and is mainly for benchmarking purposes. The CUDA version is implemented using NVIDIA's CUDA framework for GPU acceleration and OpenCV for visualization.
+In addition to the algorithms, this project includes both CPU and CUDA versions of the simulation. The CPU version is implemented using C++ and OpenGL and is mainly for benchmarking purposes. The CUDA version is implemented using NVIDIA's CUDA framework for GPU acceleration and OpenCV for visualization. The Barnes-Hut CUDA implementation is able to simulate 5 million bodies in 1509 ms per iteration.
 
 ## Simulations
 
