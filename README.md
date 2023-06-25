@@ -1,5 +1,11 @@
 # N-body-simulation
 
+## About the Project
+
+<p align="center"> 
+    <a href="https://youtu.be/Krb5nEYRVaM"><img src="images/galaxy_collision.png"  width="500" height="400"></a>
+</p>
+
 This project implements N-body simulations for both CPU and CUDA versions, using both the direct sum and Barnes-Hut algorithms. The simulations include spiral galaxy, random body initializations, galaxy collision, and our solar system.
 
 ## Introduction
