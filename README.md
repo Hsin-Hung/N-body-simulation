@@ -21,14 +21,18 @@ In addition to the algorithms, this project includes both CPU and CUDA versions 
 
 The project includes several N-body simulations, including:
 
-* [Spiral galaxy](https://youtu.be/Sap3lGzhlzE): Simulates a spiral galaxy over time.
-* Random body initializations: Simulates a system of randomly initialized bodies and their interactions.
-* [Galaxy Collision](https://youtu.be/Krb5nEYRVaM): Simulates the collision of two galaxies and their resulting interactions.
-* Solar system: Simulates the movement of the planets in our solar system (Sun, Mercury, Venus, Earth, Mars).
+* **[Spiral galaxy](https://youtu.be/Sap3lGzhlzE)**: Simulates a spiral galaxy over time.
+* **Random body initializations**: Simulates a system of randomly initialized bodies and their interactions.
+* **[Galaxy Collision](https://youtu.be/Krb5nEYRVaM)**: Simulates the collision of two galaxies and their resulting interactions.
+* **Solar system**: Simulates the movement of the planets in our solar system (Sun, Mercury, Venus, Earth, Mars).
 
 ## Getting Started
 
 To run the simulations, you will need an NVIDIA GPU with CUDA support for the CUDA version. Instructions for building and running the simulations are provided in the README.md file in each simulation directory.
+
+* **CPU**: [Getting Started](https://github.com/Hsin-Hung/N-body-simulation/tree/main/src/cpu)
+* **GPU Direct Sum**: [Getting Started](https://github.com/Hsin-Hung/N-body-simulation/tree/main/src/gpu/DS)
+* **GPU Barnes-Hut**: [Getting Started](https://github.com/Hsin-Hung/N-body-simulation/tree/main/src/gpu/BH)
 
 ## Contributions
 
