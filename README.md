@@ -8,7 +8,8 @@
 
 This project implements N-body simulations for both CPU and CUDA versions, using both the direct sum and Barnes-Hut algorithms. The simulations include spiral galaxy, random body initializations, galaxy collision, and our solar system.
 
-[Project Report](https://hsin-hung.github.io/N-body-simulation/report.pdf)
+[Blog](https://medium.com/@hsinhungw/optimizing-n-body-simulation-with-barnes-hut-algorithm-and-cuda-c76e78228c28)
+[Paper](https://hsin-hung.github.io/N-body-simulation/report.pdf)
 
 ## Introduction
 
